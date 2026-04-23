@@ -52,9 +52,12 @@ tbody tr.al{background:rgba(255,77,79,.04)!important}tbody tr.al td{color:var(--
 .trow{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;font-size:13px;color:var(--c2)}
 .tv{font-weight:600}
 .dp{color:var(--grn);font-weight:600}.dn{color:var(--red);font-weight:600}
-.mod-card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);padding:20px;cursor:pointer;transition:var(--tr)}
-.mod-card:hover{box-shadow:var(--shm);border-color:var(--acc);transform:translateY(-2px)}
-.mod-card .mod-title{font-size:15px;font-weight:700;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bdl);display:flex;align-items:center;gap:8px}
+.mod-card{background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--acc);border-radius:var(--r);padding:20px;cursor:pointer;transition:var(--tr);position:relative}
+.mod-card:hover{box-shadow:0 6px 24px rgba(22,119,255,.15);border-color:var(--acc);border-left-color:var(--acc);transform:translateY(-3px);background:linear-gradient(135deg,rgba(22,119,255,.02),transparent)}
+.mod-card .mod-title{font-size:15px;font-weight:700;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bdl);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mod-card .mod-drill{font-size:12px;font-weight:500;color:var(--acc);display:flex;align-items:center;gap:4px;opacity:.7;transition:var(--tr);white-space:nowrap}
+.mod-card:hover .mod-drill{opacity:1;transform:translateX(3px)}
+.mod-card .mod-drill svg{width:14px;height:14px}
 .mod-card .mod-kpi{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .mk .mkl{font-size:11px;color:var(--c2);margin-bottom:3px}.mk .mkv{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
 .evtag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}.evtag.good{background:#f6ffed;color:var(--grnd);border:1px solid #b7eb8f}.evtag.ok{background:#e6f4ff;color:#0958d9;border:1px solid #91caff}.evtag.warn{background:#fff7e6;color:#d46b08;border:1px solid #ffd591}.evtag.bad{background:#fff1f0;color:#cf1322;border:1px solid #ffa39e}
@@ -363,7 +366,7 @@ const R={
       const rm2=sss.rev.ann-sss.rev.ytd,g2=rm2-ooo.oh-ooo.hp,cv2=rm2>0?(ooo.oh+ooo.hp)/rm2*100:999;
       const tmg=ppp.reduce((s,p)=>s+p.mg,0),trv=ppp.reduce((s,p)=>s+p.rv,0),amr=trv>0?tmg/trv*100:0;
       const card=U.h('div','mod-card');
-      card.innerHTML='<div class="mod-title"><span style="font-size:18px">'+MD.org[ck].label+'</span></div>'+
+      card.innerHTML='<div class="mod-title"><span style="font-size:18px">'+MD.org[ck].label+'</span><span class="mod-drill">查看详情 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div>'+
         '<div class="mod-kpi">'+
         '<div class="mk"><div class="mkl">收入达成率</div><div class="mkv" style="color:'+(rr>=80?'var(--grn)':rr>=50?'#d48806':'var(--red)')+'">'+U.fP(rr)+'</div></div>'+
         '<div class="mk"><div class="mkl">发货达成率</div><div class="mkv" style="color:'+(sr>=80?'var(--grn)':sr>=50?'#d48806':'var(--red)')+'">'+U.fP(sr)+'</div></div>'+
