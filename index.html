@@ -61,6 +61,9 @@ tbody tr.al{background:rgba(255,77,79,.04)!important}tbody tr.al td{color:var(--
 .mod-card .mod-kpi{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .mk .mkl{font-size:11px;color:var(--c2);margin-bottom:3px}.mk .mkv{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
 .evtag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}.evtag.good{background:#f6ffed;color:var(--grnd);border:1px solid #b7eb8f}.evtag.ok{background:#e6f4ff;color:#0958d9;border:1px solid #91caff}.evtag.warn{background:#fff7e6;color:#d46b08;border:1px solid #ffd591}.evtag.bad{background:#fff1f0;color:#cf1322;border:1px solid #ffa39e}
+.fee-ok{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#f6ffed;color:var(--grnd);border:1px solid #b7eb8f}
+.fee-over{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#fff1f0;color:#cf1322;border:1px solid #ffa39e}
+.warn3{color:var(--red);font-weight:700}
 @media(max-width:1400px){.kg{grid-template-columns:repeat(3,1fr)}.kg.c6,.kg.c5{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:1024px){.kg{grid-template-columns:repeat(2,1fr)}.cr,.cr.c3{grid-template-columns:1fr}}
 @media(max-width:768px){.kg{grid-template-columns:repeat(2,1fr)}#hdr{flex-wrap:wrap;height:auto;padding:10px 16px;gap:8px}#main{padding:16px}}
@@ -85,9 +88,18 @@ const U={
   fDA(v){if(v==null)return'-';return v>0?'<span class="dp">+'+U.fN(v)+'</span>':'<span class="dn">'+U.fN(v)+'</span>'},
   lt(r){return r>=100?'g':r>=80?'y':'r'},
   ltH(r){return'<span class="lt '+U.lt(r)+'"></span>'+U.fP(r)},
-  pB(p){const c=p>=75?'h':p>=50?'m':p>=25?'l':'n',l=p>=75?'≥75%':p>=50?'50-75%':p>=25?'25-50%':'<25%';return'<span class="pb '+c+'">'+l+'</span>'},
+  pB(p){const c=p>=75?'h':p>=50?'m':p>=25?'l':'n',l=p>=75?'>=75%':p>=50?'50-75%':p>=25?'25-50%':'<25%';return'<span class="pb '+c+'">'+l+'</span>'},
   sB(s){const m={'跟进中':'f','报价中':'q','待签约':'sg','已签约':'sd'};return'<span class="sb '+(m[s]||'f')+'">'+s+'</span>'},
   evTag(rate){return rate>=30?'<span class="evtag good">表现优异</span>':rate>=22?'<span class="evtag ok">正常推进</span>':rate>=15?'<span class="evtag warn">需关注</span>':'<span class="evtag bad">重点帮扶</span>'},
+  /* 人效排名颜色: >=80% green, 50-80% orange, <50% red */
+  rankColor(rate){return rate>=80?'var(--grn)':rate>=50?'var(--org)':'var(--red)'},
+  rankLtH(rate,warn3){
+    const c=rate>=80?'g':rate>=50?'y':'r';
+    let s='<span class="lt '+c+'"></span>'+U.fP(rate);
+    if(warn3) s+=' <span class="warn3">!!!</span>';
+    return s;
+  },
+  feeEval(actual,sug){return actual<=sug?'<span class="fee-ok">费用合理</span>':'<span class="fee-over">费用超标</span>'},
   el(id){return document.getElementById(id)},
   h(t,c,html){const e=document.createElement(t);if(c)e.className=c;if(html!==undefined)e.innerHTML=html;return e}
 };
@@ -109,7 +121,40 @@ const MD=(function(){
   const RL={dkh1:'大客户一部',dkh2:'大客户二部',e1:'华东一区',e2:'华东二区',s1:'华南区',n1:'华北区',w1:'西部区',
     au:'澳新',sea:'东南亚',hktw:'港澳台',kr:'韩国',ind:'印度',cis:'俄语区',tr:'土耳其',jp:'日本',
     nl:'荷兰',uk:'英国',mea:'中东非',
-    ca:'加拿大',us:'美国',mx:'墨西哥',br:'巴西',latam:'南美其他'};
+    ca:'加拿大',us:'美国',mx:'墨西哥',br:'巴西',latam:'南美其他',
+    /* 国家标签 */
+    au_au:'澳大利亚',au_nz:'新西兰',sea_sg:'新加坡',sea_my:'马来西亚',sea_th:'泰国',sea_id:'印尼',
+    hktw_hk:'香港',hktw_tw:'台湾',kr_kr:'韩国',ind_in:'印度',
+    cis_ru:'俄罗斯',cis_kz:'哈萨克斯坦',cis_uz:'乌兹别克斯坦',tr_tr:'土耳其',jp_jp:'日本',
+    nl_nl:'荷兰',nl_de:'德国',nl_be:'比利时',uk_uk:'英国',uk_ie:'爱尔兰',
+    mea_ae:'阿联酋',mea_sa:'沙特',mea_ng:'尼日利亚',
+    ca_ca:'加拿大',us_us:'美国',mx_mx:'墨西哥',br_br:'巴西',latam_co:'哥伦比亚'
+  };
+
+  /* === 国家层级映射(5层下钻: 国际总→事业部→区域→国家→销售人员) === */
+  const ctryMap={
+    au:[{id:'au_au',label:'澳大利亚'},{id:'au_nz',label:'新西兰'}],
+    sea:[{id:'sea_sg',label:'新加坡'},{id:'sea_my',label:'马来西亚'},{id:'sea_th',label:'泰国'},{id:'sea_id',label:'印尼'}],
+    hktw:[{id:'hktw_hk',label:'香港'},{id:'hktw_tw',label:'台湾'}],
+    kr:[{id:'kr_kr',label:'韩国'}],
+    ind:[{id:'ind_in',label:'印度'}],
+    cis:[{id:'cis_ru',label:'俄罗斯'},{id:'cis_kz',label:'哈萨克斯坦'},{id:'cis_uz',label:'乌兹别克斯坦'}],
+    tr:[{id:'tr_tr',label:'土耳其'}],
+    jp:[{id:'jp_jp',label:'日本'}],
+    nl:[{id:'nl_nl',label:'荷兰'},{id:'nl_de',label:'德国'},{id:'nl_be',label:'比利时'}],
+    uk:[{id:'uk_uk',label:'英国'},{id:'uk_ie',label:'爱尔兰'}],
+    mea:[{id:'mea_ae',label:'阿联酋'},{id:'mea_sa',label:'沙特'},{id:'mea_ng',label:'尼日利亚'}],
+    ca:[{id:'ca_ca',label:'加拿大'}],
+    us:[{id:'us_us',label:'美国'}],
+    mx:[{id:'mx_mx',label:'墨西哥'}],
+    br:[{id:'br_br',label:'巴西'}],
+    latam:[{id:'latam_co',label:'哥伦比亚'}]
+  };
+
+  /* 建议费用率(财务提供, 按区域) */
+  const sugFeeRate={au:3.5,sea:4.0,hktw:3.0,kr:3.2,ind:4.5,cis:3.8,tr:4.2,jp:3.0,
+    nl:2.8,uk:3.0,mea:4.5,ca:2.5,us:2.5,mx:4.0,br:4.0,latam:4.5,
+    dkh1:3.0,dkh2:3.0,e1:3.2,e2:3.2,s1:3.5,n1:3.2,w1:3.8};
 
   /* 销售数据生成 */
   function gS(t,rate){
@@ -122,33 +167,55 @@ const MD=(function(){
     return{rev:{ann:t,ytd:ar,bgt:t,prev:pa,acc:Math.round(t*.05),accY:Math.round(ar*.05)},ship:{ann:Math.round(t*1.05),ytd:as,bgt:Math.round(t*1.05),prev:Math.round(pa*1.03)},coll:{ann:Math.round(t*.9),ytd:ac,bgt:Math.round(t*.9),prev:Math.round(pa*.85)},mo};
   }
 
-  /* 人员数据生成(增强) */
-  function gM(name,t,rate,yr){
+  /* 人员数据生成(增强: 新增商机运营指标+费用拆分+3个月达成率) */
+  function gM(name,t,rate,yr,ctry){
     const s=gS(t,rate);
-    /* 4档概率商机 */
     const p25=Math.round(t*.06*(.5+Math.random())),p2550=Math.round(t*.10*(.5+Math.random())),
           p5075=Math.round(t*.12*(.5+Math.random())),p75p=Math.round(t*.09*(.5+Math.random()));
     const to=p25+p2550+p5075+p75p, p50=p5075+p75p, oh=Math.round(t*.15*(.5+Math.random()));
-    /* 预测 */
     const mTgt=Math.round(t/12),fcSgn=Math.round(mTgt*(.35+Math.random()*.5)),fcPl=Math.round(mTgt*(.15+Math.random()*.35));
-    /* 费用 */
-    const seAmt=Math.round(s.rev.ytd*(.02+Math.random()*.03)*10000);
-    return{name,s,yr:yr||Math.ceil(Math.random()*8),
+    /* 销售费用拆分: 市场推广费/差旅费/招待费 */
+    const seTotal=Math.round(s.rev.ytd*(.02+Math.random()*.03)*10000);
+    const mktPct=.35+Math.random()*.1, trvPct=.30+Math.random()*.1;
+    const mktFee=Math.round(seTotal*mktPct),trvFee=Math.round(seTotal*trvPct),entFee=seTotal-mktFee-trvFee;
+    /* 3个月各月达成率(用于连续低于50%判定) */
+    const m1r=s.mo[0]&&s.mo[0].rA!=null&&s.mo[0].rT>0?s.mo[0].rA/s.mo[0].rT*100:50+Math.random()*60;
+    const m2r=s.mo[1]&&s.mo[1].rA!=null&&s.mo[1].rT>0?s.mo[1].rA/s.mo[1].rT*100:50+Math.random()*60;
+    const m3r=s.mo[2]&&s.mo[2].rA!=null&&s.mo[2].rT>0?s.mo[2].rA/s.mo[2].rT*100:50+Math.random()*60;
+    /* 新增商机运营指标 */
+    const oppPCnt=Math.round(5+Math.random()*20);
+    const oppUpdRate=60+Math.random()*35;       /* 商机月度更新率 60-95% */
+    const oppVisitRate=40+Math.random()*45;     /* 商机拜访率 40-85% */
+    const opp50F2F=30+Math.random()*45;         /* 50%以上商机面对面拜访率 30-75% */
+    const oppConvRate=15+Math.random()*25;      /* 商机转化率 15-40% */
+    const oppLostRate=5+Math.random()*15;       /* 丢单率 5-20% */
+    const oppExpireRate=3+Math.random()*12;     /* 失效率 3-15% */
+    /* 过账预测偏差率: 对N+1月预测 vs 实际, -20%~+30% */
+    const fcDevRate=-20+Math.random()*50;
+    return{name,s,yr:yr||Math.ceil(Math.random()*8),ctry:ctry||null,
       oh,to,hp:p50,pl4:{p25,p2550,p5075,p75:p75p},p50,
-      pCnt:Math.round(5+Math.random()*20),
-      fc:{signed:fcSgn,pipeline:fcPl,total:fcSgn+fcPl,target:mTgt,
-        stretch:Math.round((fcSgn+fcPl)*1.15),commit:Math.round((fcSgn+fcPl)*.85)},
-      se:seAmt,seR:s.rev.ytd>0?seAmt/(s.rev.ytd*10000)*100:0,
+      pCnt:oppPCnt,
+      oppUpd:oppUpdRate,oppVisit:oppVisitRate,opp50F2F,oppConv:oppConvRate,oppLost:oppLostRate,oppExpire:oppExpireRate,fcDev:fcDevRate,
+      fc:{signed:fcSgn,pipeline:fcPl,total:fcSgn+fcPl,target:mTgt,stretch:Math.round((fcSgn+fcPl)*1.15),commit:Math.round((fcSgn+fcPl)*.85)},
+      se:seTotal,mktFee,trvFee,entFee,seR:s.rev.ytd>0?seTotal/(s.rev.ytd*10000)*100:0,
+      m1r,m2r,m3r,
       pipe:[{cu:'客户A-'+name.slice(0,2),pr:'GTZZ22J',am:Math.round(t*.06),pb:75,mn:5,st:'报价中'},
             {cu:'客户B-'+name.slice(0,2),pr:'GTBZ20S',am:Math.round(t*.05),pb:50,mn:6,st:'跟进中'},
             {cu:'客户C-'+name.slice(0,2),pr:'GTZZ16J',am:Math.round(t*.04),pb:85,mn:4,st:'待签约'},
             {cu:'客户D-'+name.slice(0,2),pr:'GTBZ26S',am:Math.round(t*.035),pb:30,mn:7,st:'跟进中'}]};
   }
 
-  /* 产品类型(含新品/套筒) */
-  const MT=['直臂式','曲臂式','剪叉式','套筒式','桅柱式','新品'];
-  const PM={'直臂式':['GTZZ22J','GTZZ26J','GTZZ30J','GTZZ38J'],'曲臂式':['GTBZ14S','GTBZ18S','GTBZ22S','GTBZ26S'],'剪叉式':['JCPT0807','JCPT1012','JCPT1412'],'套筒式':['GTTT12','GTTT16'],'桅柱式':['WZPT06','WZPT08'],'新品':['SQZZ20','SQZZ25','SKCZ10','SCCZ08']};
-  function gP(sc){const d=[];MT.forEach(mt=>{PM[mt].forEach(pm=>{const q=Math.round(Math.random()*20*sc)+1,up=Math.round(15+Math.random()*60),rv=q*up,cr=.6+Math.random()*.15;d.push({mt,pm,q,rv,sh:Math.round(rv*1.05),mg:Math.round(rv*(1-cr)),mr:(1-cr)*100,pd:Math.round((Math.random()-.4)*up*.1*q)});});});return d;}
+  /* 产品类型(细化:普通剪叉/越野剪叉/电动剪叉) */
+  const MT=['直臂式','曲臂式','普通剪叉','越野剪叉','电动剪叉','套筒式','桅柱式','新品'];
+  const PM={'直臂式':['GTZZ22J','GTZZ26J','GTZZ30J','GTZZ38J'],'曲臂式':['GTBZ14S','GTBZ18S','GTBZ22S','GTBZ26S'],
+    '普通剪叉':['JCPT0807','JCPT1012','JCPT1412'],'越野剪叉':['JCPT0807RT','JCPT1012RT'],'电动剪叉':['JCPT0607E','JCPT0807E','JCPT1012E'],
+    '套筒式':['GTTT12','GTTT16'],'桅柱式':['WZPT06','WZPT08'],'新品':['SQZZ20','SQZZ25','SKCZ10','SCCZ08']};
+  /* 预算毛利率(按产品大类, 财务提供) */
+  const budgetMR={'直臂式':33,'曲臂式':31,'普通剪叉':28,'越野剪叉':35,'电动剪叉':30,'套筒式':36,'桅柱式':29,'新品':25};
+
+  function gP(sc){const d=[];MT.forEach(mt=>{PM[mt].forEach(pm=>{const q=Math.round(Math.random()*20*sc)+1,up=Math.round(15+Math.random()*60),rv=q*up,cr=.6+Math.random()*.15,mr=(1-cr)*100;
+    const bMr=budgetMR[mt]||30;const bMg=Math.round(rv*bMr/100);const mg=Math.round(rv*(1-cr));
+    d.push({mt,pm,q,rv,sh:Math.round(rv*1.05),mg,mr,bMg,bMr,mgDev:bMr>0?(mr-bMr)/bMr*100:0,pd:Math.round((Math.random()-.4)*up*.1*q),premRate:(Math.random()-.4)*10});});});return d;}
 
   /* 费用 */
   const EI=['销售费用','管理费用','研发费用','财务费用'];
@@ -160,49 +227,32 @@ const MD=(function(){
     return{rv,items,tot:{a:tA,b:tB,pb:tPb,p:tP,rate:rv>0?tA/rv*100:0,bR:rv>0?tB/rv*100:0,vsB:tA-tB,vsBP:tB>0?(tA-tB)/tB*100:0,vsP:tA-tP,vsPP:tP>0?(tA-tP)/tP*100:0}};
   }
 
-  /* 人员配置 - 国内保持简单，国际按Excel真实结构 */
+  /* 人员配置(含国家分配) */
   const mgrs={},sR={},pR={},eR={};
   const RC={
-    /* 国内 */
     dkh1:[['张建华',5500,.33,6],['李明',4800,.32,4]],dkh2:[['王磊',5000,.33,5],['刘洋',4200,.32,3]],
     e1:[['陈强',4000,.33,4],['赵峰',3500,.31,3]],e2:[['孙涛',3800,.32,5],['周军',3200,.31,2]],
     s1:[['吴鑫',4500,.32,6],['郑浩',3800,.32,3]],n1:[['冯伟',4200,.32,4],['钱坤',3600,.32,3]],w1:[['杨帆',3500,.31,3],['许磊',3000,.31,2]],
-    /* IBU-澳新(年度目标38000) */
-    au:[['王海明',10000,.28,5],['李建国',9500,.26,4],['张峰',9500,.25,3],['陈杰',9000,.24,2]],
-    /* IBU-东南亚(20000) */
-    sea:[['周强',6000,.24,4],['吴佳慧',5000,.22,3],['林浩',5000,.21,2],['黄涛',4000,.20,1]],
-    /* IBU-港澳台(9500) */
-    hktw:[['郑鹏飞',5000,.25,4],['何志明',4500,.23,3]],
-    /* IBU-韩国(8500) */
-    kr:[['刘正宇',5000,.24,3],['金成勋',3500,.22,2]],
-    /* IBU-印度(5000) */
-    ind:[['马超',3000,.19,2],['Raj Kumar',2000,.17,1]],
-    /* IBU-俄语区/CIS(34000) */
-    cis:[['唐磊',12000,.22,5],['陈宇',11000,.21,4],['张伟',11000,.20,3]],
-    /* IBU-土耳其(15000) */
-    tr:[['孙磊',8000,.23,3],['Ahmet',7000,.21,2]],
-    /* IBU-日本(5000) */
-    jp:[['黄伟',3000,.23,3],['田中太郎',2000,.21,2]],
-    /* EBU-荷兰(57000) */
-    nl:[['Bensons Pauls',10000,.30,5],['Bogdan Lucjan',9000,.22,3],['Cerdans Sergio',9500,.29,4],['Ionescu Paula',3500,.28,2],['Lanzini Daniele',8000,.25,4],['Meheust Thomas',9000,.26,5],['Schellen Gregor',8000,.18,3]],
-    /* EBU-英国(20800) */
-    uk:[['John Chandler',8000,.28,6],['Harry Mcloughlin',7000,.25,3],['Tim White',5800,.24,2]],
-    /* EBU-中东非(15000) - 新增 */
-    mea:[['Bakr',6000,.17,2],['Alistair',5000,.16,3],['罗妍',4000,.14,1]],
-    /* ABU-加拿大(37400) */
-    ca:[['David Chen',13000,.29,5],['Michael Lee',12400,.28,4],['Chris Wang',12000,.27,3]],
-    /* ABU-美国(44700) */
-    us:[['John Smith',12000,.27,5],['Mike Johnson',11000,.26,4],['Sarah Davis',11000,.25,3],['James Wilson',10700,.24,3]],
-    /* ABU-墨西哥(15000) */
-    mx:[['Carlos Garcia',8000,.24,3],['Maria Lopez',7000,.22,2]],
-    /* ABU-巴西(15000) */
-    br:[['Lucas Silva',8000,.23,3],['Anna Santos',7000,.22,2]],
-    /* ABU-南美其他(5000) - 新增 */
-    latam:[['Pedro Martinez',5000,.19,2]]
+    au:[['王海明',10000,.28,5,'au_au'],['李建国',9500,.26,4,'au_au'],['张峰',9500,.25,3,'au_nz'],['陈杰',9000,.24,2,'au_nz']],
+    sea:[['周强',6000,.24,4,'sea_sg'],['吴佳慧',5000,.22,3,'sea_my'],['林浩',5000,.21,2,'sea_th'],['黄涛',4000,.20,1,'sea_id']],
+    hktw:[['郑鹏飞',5000,.25,4,'hktw_hk'],['何志明',4500,.23,3,'hktw_tw']],
+    kr:[['刘正宇',5000,.24,3,'kr_kr'],['金成勋',3500,.22,2,'kr_kr']],
+    ind:[['马超',3000,.19,2,'ind_in'],['Raj Kumar',2000,.17,1,'ind_in']],
+    cis:[['唐磊',12000,.22,5,'cis_ru'],['陈宇',11000,.21,4,'cis_kz'],['张伟',11000,.20,3,'cis_uz']],
+    tr:[['孙磊',8000,.23,3,'tr_tr'],['Ahmet',7000,.21,2,'tr_tr']],
+    jp:[['黄伟',3000,.23,3,'jp_jp'],['田中太郎',2000,.21,2,'jp_jp']],
+    nl:[['Bensons Pauls',10000,.30,5,'nl_nl'],['Bogdan Lucjan',9000,.22,3,'nl_de'],['Cerdans Sergio',9500,.29,4,'nl_nl'],['Ionescu Paula',3500,.28,2,'nl_be'],['Lanzini Daniele',8000,.25,4,'nl_nl'],['Meheust Thomas',9000,.26,5,'nl_de'],['Schellen Gregor',8000,.18,3,'nl_nl']],
+    uk:[['John Chandler',8000,.28,6,'uk_uk'],['Harry Mcloughlin',7000,.25,3,'uk_uk'],['Tim White',5800,.24,2,'uk_ie']],
+    mea:[['Bakr',6000,.17,2,'mea_ae'],['Alistair',5000,.16,3,'mea_sa'],['罗妍',4000,.14,1,'mea_ng']],
+    ca:[['David Chen',13000,.29,5,'ca_ca'],['Michael Lee',12400,.28,4,'ca_ca'],['Chris Wang',12000,.27,3,'ca_ca']],
+    us:[['John Smith',12000,.27,5,'us_us'],['Mike Johnson',11000,.26,4,'us_us'],['Sarah Davis',11000,.25,3,'us_us'],['James Wilson',10700,.24,3,'us_us']],
+    mx:[['Carlos Garcia',8000,.24,3,'mx_mx'],['Maria Lopez',7000,.22,2,'mx_mx']],
+    br:[['Lucas Silva',8000,.23,3,'br_br'],['Anna Santos',7000,.22,2,'br_br']],
+    latam:[['Pedro Martinez',5000,.19,2,'latam_co']]
   };
 
   Object.keys(RC).forEach(rk=>{
-    mgrs[rk]=RC[rk].map(c=>gM(c[0],c[1],c[2],c[3]));
+    mgrs[rk]=RC[rk].map(c=>gM(c[0],c[1],c[2],c[3],c[4]||null));
     const rs={rev:{ann:0,ytd:0,bgt:0,prev:0,acc:0,accY:0},ship:{ann:0,ytd:0,bgt:0,prev:0},coll:{ann:0,ytd:0,bgt:0,prev:0}};
     mgrs[rk].forEach(m=>{['rev','ship','coll'].forEach(t=>{Object.keys(rs[t]).forEach(k=>{rs[t][k]+=m.s[t][k]||0;});});});
     sR[rk]=rs;pR[rk]=gP(mgrs[rk].reduce((s,m)=>s+m.s.rev.ann,0)/5000);eR[rk]=gE(mgrs[rk].reduce((s,m)=>s+m.s.rev.ytd,0));
@@ -215,22 +265,30 @@ const MD=(function(){
     const tA=items.reduce((s,i)=>s+i.a,0),tB=items.reduce((s,i)=>s+i.b,0),tPb=items.reduce((s,i)=>s+i.pb,0),tP=items.reduce((s,i)=>s+i.p,0);
     return{rv,items,tot:{a:tA,b:tB,pb:tPb,p:tP,rate:rv>0?tA/rv*100:0,bR:rv>0?tB/rv*100:0,vsB:tA-tB,vsBP:tB>0?(tA-tB)/tB*100:0,vsP:tA-tP,vsPP:tP>0?(tA-tP)/tP*100:0}};}
 
-  /* 商机聚合(增强) */
-  function aO(ks){let oh=0,to=0,hp=0,p50=0,pl4={p25:0,p2550:0,p5075:0,p75:0},pCnt=0,fcS=0,fcP=0,fcTgt=0;
+  /* 商机聚合(增强:新增运营指标) */
+  function aO(ks,ctryFilter){let oh=0,to=0,hp=0,p50=0,pl4={p25:0,p2550:0,p5075:0,p75:0},pCnt=0,fcS=0,fcP=0,fcTgt=0;
+    let oppUpdSum=0,oppVisitSum=0,opp50F2FSum=0,oppConvSum=0,oppLostSum=0,oppExpireSum=0,fcDevSum=0,mCnt=0;
     const ap=[];
     ks.forEach(rk=>{(mgrs[rk]||[]).forEach(m=>{
+      if(ctryFilter&&m.ctry!==ctryFilter)return;
       oh+=m.oh;to+=m.to;hp+=m.hp;p50+=m.p50||0;pCnt+=m.pCnt||0;
       if(m.pl4){pl4.p25+=m.pl4.p25;pl4.p2550+=m.pl4.p2550;pl4.p5075+=m.pl4.p5075;pl4.p75+=m.pl4.p75;}
       if(m.fc){fcS+=m.fc.signed;fcP+=m.fc.pipeline;fcTgt+=m.fc.target;}
+      oppUpdSum+=m.oppUpd||0;oppVisitSum+=m.oppVisit||0;opp50F2FSum+=m.opp50F2F||0;
+      oppConvSum+=m.oppConv||0;oppLostSum+=m.oppLost||0;oppExpireSum+=m.oppExpire||0;fcDevSum+=m.fcDev||0;mCnt++;
       (m.pipe||[]).forEach(p=>{ap.push({...p,ow:m.name,rg:RL[rk]});});
     });});
+    const avg=v=>mCnt>0?v/mCnt:0;
     return{oh,to,hp,p50,pl4,pCnt,fc:{signed:fcS,pipeline:fcP,total:fcS+fcP,target:fcTgt,
-      stretch:Math.round((fcS+fcP)*1.15),commit:Math.round((fcS+fcP)*.85)},pipe:ap};}
+      stretch:Math.round((fcS+fcP)*1.15),commit:Math.round((fcS+fcP)*.85)},pipe:ap,
+      oppUpd:avg(oppUpdSum),oppVisit:avg(oppVisitSum),opp50F2F:avg(opp50F2FSum),
+      oppConv:avg(oppConvSum),oppLost:avg(oppLostSum),oppExpire:avg(oppExpireSum),fcDev:avg(fcDevSum)};}
 
   /* 预测聚合 */
-  function aFC(ks){
+  function aFC(ks,ctryFilter){
     let annTgt=0,q1Tgt=0,q1Act=0,prevQ1=0,nmTgt=0,nmSgn=0,nmPl=0,strch=0,cmit=0;
     ks.forEach(rk=>{(mgrs[rk]||[]).forEach(m=>{
+      if(ctryFilter&&m.ctry!==ctryFilter)return;
       annTgt+=m.s.rev.ann; q1Tgt+=Math.round(m.s.rev.ann*.25);
       q1Act+=m.s.mo.filter(x=>x.rA!=null).reduce((s,x)=>s+x.rA,0);
       prevQ1+=Math.round(m.s.rev.prev*.25);
@@ -242,13 +300,16 @@ const MD=(function(){
       stretch:strch,commit:cmit};
   }
 
-  /* 人效聚合 */
-  function aSE(ks){
+  /* 人效聚合(增强:费用拆分+建议费用率+3个月达成判定) */
+  function aSE(ks,ctryFilter){
     const arr=[];
     ks.forEach(rk=>{(mgrs[rk]||[]).forEach(m=>{
+      if(ctryFilter&&m.ctry!==ctryFilter)return;
       const r=m.s.rev.ann>0?m.s.rev.ytd/m.s.rev.ann*100:0;
-      arr.push({name:m.name,yr:m.yr,rg:RL[rk],annTgt:m.s.rev.ann,ytd:m.s.rev.ytd,
-        rate:r,pipeline90d:m.to,se:m.se,seR:m.seR,eval:r});
+      const warn3=m.m1r<50&&m.m2r<50&&m.m3r<50;
+      arr.push({name:m.name,yr:m.yr,rg:RL[rk],ctry:m.ctry?RL[m.ctry]:'',annTgt:m.s.rev.ann,ytd:m.s.rev.ytd,
+        rate:r,pipeline90d:m.to,se:m.se,mktFee:m.mktFee,trvFee:m.trvFee,entFee:m.entFee,
+        seR:m.seR,sugR:sugFeeRate[rk]||3.5,m1r:m.m1r,m2r:m.m2r,m3r:m.m3r,warn3,eval:r});
     });});
     arr.sort((a,b)=>b.rate-a.rate);
     arr.forEach((m,i)=>{m.rank=i+1;});
@@ -258,20 +319,34 @@ const MD=(function(){
   function gK(ck){const c=org[ck],ks=[];Object.values(c.segs).forEach(sg=>{ks.push(...sg.rgs);});return ks;}
   function bK(bk){for(const ck of Object.keys(org)){const sg=org[ck].segs;if(sg[bk])return sg[bk].rgs;}return[];}
   function allK(){return gK('domestic').concat(gK('intl'));}
-  return{org,RL,MT,mgrs,aS,aP,aE,aO,aFC,aSE,gK,bK,allK,gMgrs(rk){return mgrs[rk]||[];}};
+  /* 获取区域中指定国家的人员 */
+  function gMgrsFiltered(rk,ctryFilter){return(mgrs[rk]||[]).filter(m=>!ctryFilter||m.ctry===ctryFilter);}
+  /* 国家级聚合销售数据 */
+  function aSCtry(rk,ctryId){
+    const ms=gMgrsFiltered(rk,ctryId);
+    const s={rev:{ann:0,ytd:0,bgt:0,prev:0,acc:0,accY:0},ship:{ann:0,ytd:0,bgt:0,prev:0},coll:{ann:0,ytd:0,bgt:0,prev:0}};
+    ms.forEach(m=>{['rev','ship','coll'].forEach(t=>{Object.keys(s[t]).forEach(k=>{s[t][k]+=m.s[t][k]||0;});});});
+    return s;
+  }
+  return{org,RL,MT,ctryMap,sugFeeRate,mgrs,aS,aP,aE,aO,aFC,aSE,gK,bK,allK,gMgrs(rk){return mgrs[rk]||[];},gMgrsFiltered,aSCtry,budgetMR};
 })();
 
-/* ===== 状态 ===== */
-const S={dl:0,ck:null,bk:null,rk:null,charts:[],dp:[{label:'集团总览',lv:0}]};
+/* ===== 状态(增加ctry层级) ===== */
+const S={dl:0,ck:null,bk:null,rk:null,ctry:null,charts:[],dp:[{label:'集团总览',lv:0}]};
 
-/* ===== 导航 ===== */
+/* ===== 导航(支持5层) ===== */
 const Nav={
   updBC(){
     const c=U.el('bc');c.innerHTML='<span class="bcl">当前位置</span>';
     S.dp.forEach((item,i)=>{
       if(i>0)c.appendChild(U.h('span','bcs','›'));
       const sp=U.h('span',i===S.dp.length-1?'bci cur':'bci',item.label);
-      if(i<S.dp.length-1){sp.addEventListener('click',()=>{S.dp=S.dp.slice(0,i+1);S.dl=item.lv;if(item.lv<1){S.ck=null;S.bk=null;S.rk=null;}else if(item.lv<2){S.bk=null;S.rk=null;}else if(item.lv<3){S.rk=null;}App.render();});}
+      if(i<S.dp.length-1){sp.addEventListener('click',()=>{S.dp=S.dp.slice(0,i+1);S.dl=item.lv;
+        if(item.lv<1){S.ck=null;S.bk=null;S.rk=null;S.ctry=null;}
+        else if(item.lv<2){S.bk=null;S.rk=null;S.ctry=null;}
+        else if(item.lv<3){S.rk=null;S.ctry=null;}
+        else if(item.lv<4){S.ctry=null;}
+        App.render();});}
       c.appendChild(sp);});
   },
   drill(label,lv,upd){S.dp.push({label,lv});S.dl=lv;Object.assign(S,upd);App.render();}
@@ -285,11 +360,9 @@ const CF={
   s3(mo,tp){const f=tp==='rev'?'r':tp==='ship'?'s':'c',ms=mo.map(d=>d.m+'月'),tg=mo.map(d=>d[f+'T']),ac=mo.map(d=>d[f+'A']),fc=mo.map(d=>d[f+'F']||null);const o=CF.base();Object.assign(o,{xAxis:{type:'category',data:ms,axisLine:{lineStyle:{color:'#e8ecf0'}}},yAxis:{type:'value',name:'万元',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}}},series:[{name:'目标',type:'bar',data:tg,itemStyle:{color:'#d6e4ff',borderRadius:[3,3,0,0]},barMaxWidth:28},{name:'实际',type:'bar',data:ac,itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'#1677ff'},{offset:1,color:'#4096ff'}]},borderRadius:[3,3,0,0]},barMaxWidth:28},{name:'预测',type:'bar',data:fc,itemStyle:{color:'rgba(22,119,255,.15)',borderColor:'#91caff',borderWidth:1,borderType:'dashed',borderRadius:[3,3,0,0]},barMaxWidth:28}]});return o;},
   mgC(labels,rates,avg){const o=CF.base();Object.assign(o,{xAxis:{type:'category',data:labels,axisLine:{lineStyle:{color:'#e8ecf0'}},axisLabel:{rotate:labels.length>6?25:0}},yAxis:{type:'value',name:'毛利率%',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}},axisLabel:{formatter:'{value}%'},max:60},series:[{name:'毛利率',type:'bar',data:rates,itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'#52c41a'},{offset:1,color:'#73d13d'}]},borderRadius:[3,3,0,0]},barMaxWidth:40,label:{show:true,position:'top',formatter:'{c}%',fontSize:11,color:'#389e0d'}},{name:'平均',type:'line',data:labels.map(()=>avg),lineStyle:{color:'#ff4d4f',width:2,type:'dashed'},symbol:'none'}]});return o;},
   exC(labels,bgt,act){const o=CF.base();Object.assign(o,{xAxis:{type:'category',data:labels,axisLine:{lineStyle:{color:'#e8ecf0'}}},yAxis:{type:'value',name:'万元',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}}},series:[{name:'预算',type:'bar',data:bgt,itemStyle:{color:'#d6e4ff',borderRadius:[3,3,0,0]},barMaxWidth:40},{name:'实际',type:'bar',data:act,itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'#fa8c16'},{offset:1,color:'#faad14'}]},borderRadius:[3,3,0,0]},barMaxWidth:40}]});return o;},
-  opS(labels,da,rem){const o=CF.base();Object.assign(o,{xAxis:{type:'category',data:labels,axisLine:{lineStyle:{color:'#e8ecf0'}},axisLabel:{rotate:labels.length>4?15:0}},yAxis:{type:'value',name:'万元',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}}},series:[{name:'≥75%',type:'bar',stack:'o',data:da.map(d=>d.p75),itemStyle:{color:'#389e0d'},barMaxWidth:50},{name:'50-75%',type:'bar',stack:'o',data:da.map(d=>d.p50),itemStyle:{color:'#36cfc9'},barMaxWidth:50},{name:'25-50%',type:'bar',stack:'o',data:da.map(d=>d.p25),itemStyle:{color:'#ffc53d'},barMaxWidth:50},{name:'<25%',type:'bar',stack:'o',data:da.map(d=>d.p0),itemStyle:{color:'#ff7875',borderRadius:[3,3,0,0]},barMaxWidth:50},{name:'剩余目标',type:'line',data:rem,lineStyle:{color:'#ff4d4f',width:2,type:'dashed'},itemStyle:{color:'#ff4d4f'},symbol:'diamond',symbolSize:9}]});return o;},
-  /* 月度毛利趋势(国际) */
+  opS(labels,da,rem){const o=CF.base();Object.assign(o,{xAxis:{type:'category',data:labels,axisLine:{lineStyle:{color:'#e8ecf0'}},axisLabel:{rotate:labels.length>4?15:0}},yAxis:{type:'value',name:'万元',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}}},series:[{name:'>=75%',type:'bar',stack:'o',data:da.map(d=>d.p75),itemStyle:{color:'#389e0d'},barMaxWidth:50},{name:'50-75%',type:'bar',stack:'o',data:da.map(d=>d.p50),itemStyle:{color:'#36cfc9'},barMaxWidth:50},{name:'25-50%',type:'bar',stack:'o',data:da.map(d=>d.p25),itemStyle:{color:'#ffc53d'},barMaxWidth:50},{name:'<25%',type:'bar',stack:'o',data:da.map(d=>d.p0),itemStyle:{color:'#ff7875',borderRadius:[3,3,0,0]},barMaxWidth:50},{name:'剩余目标',type:'line',data:rem,lineStyle:{color:'#ff4d4f',width:2,type:'dashed'},itemStyle:{color:'#ff4d4f'},symbol:'diamond',symbolSize:9}]});return o;},
   mgTrend(labels,series){const o=CF.base();o.legend.top=4;Object.assign(o,{xAxis:{type:'category',data:labels,axisLine:{lineStyle:{color:'#e8ecf0'}}},yAxis:{type:'value',name:'毛利率%',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}},axisLabel:{formatter:'{value}%'}},series});return o;},
-  /* 预测分解柱状图 */
-  fcBar(labels,signed,pipeline,target){const o=CF.base();Object.assign(o,{xAxis:{type:'category',data:labels,axisLine:{lineStyle:{color:'#e8ecf0'}},axisLabel:{rotate:labels.length>6?20:0}},yAxis:{type:'value',name:'万元',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}}},series:[{name:'已签合同预计过账',type:'bar',stack:'fc',data:signed,itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'#52c41a'},{offset:1,color:'#73d13d'}]},borderRadius:[0,0,0,0]},barMaxWidth:40},{name:'跟进商机预计过账',type:'bar',stack:'fc',data:pipeline,itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'#36cfc9'},{offset:1,color:'#5cdbd3'}]},borderRadius:[3,3,0,0]},barMaxWidth:40},{name:'月度目标',type:'line',data:target,lineStyle:{color:'#ff4d4f',width:2,type:'dashed'},itemStyle:{color:'#ff4d4f'},symbol:'diamond',symbolSize:8}]});return o;}
+  fcBar(labels,signed,pipeline,target){const o=CF.base();Object.assign(o,{xAxis:{type:'category',data:labels,axisLine:{lineStyle:{color:'#e8ecf0'}},axisLabel:{rotate:labels.length>6?20:0}},yAxis:{type:'value',name:'万元',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}}},series:[{name:'已签合同预计过账',type:'bar',stack:'fc',data:signed,itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'#52c41a'},{offset:1,color:'#73d13d'}]}},barMaxWidth:40},{name:'跟进商机预计过账',type:'bar',stack:'fc',data:pipeline,itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'#36cfc9'},{offset:1,color:'#5cdbd3'}]},borderRadius:[3,3,0,0]},barMaxWidth:40},{name:'月度目标',type:'line',data:target,lineStyle:{color:'#ff4d4f',width:2,type:'dashed'},itemStyle:{color:'#ff4d4f'},symbol:'diamond',symbolSize:8}]});return o;}
 };
 window.addEventListener('resize',()=>{S.charts.forEach(c=>{try{c.resize();}catch(e){}});});
 
@@ -303,27 +376,41 @@ function buildT(ct,cols,rows,opts={}){
   tb.appendChild(bo);w.appendChild(tb);ct.appendChild(w);
 }
 
-/* ===== 上下文 ===== */
+/* ===== 上下文(支持5层) ===== */
 function cKeys(){if(S.dl===0)return MD.allK();if(S.dl===1)return MD.gK(S.ck);if(S.dl===2)return MD.bK(S.bk);if(S.dl>=3)return[S.rk];return[];}
-function cLabel(){if(S.dl===0)return'集团';if(S.dl===1)return MD.org[S.ck].label;if(S.dl===2){for(const ck of Object.keys(MD.org)){if(MD.org[ck].segs[S.bk])return MD.org[ck].segs[S.bk].label;}return S.bk;}if(S.dl>=3)return MD.RL[S.rk];return'';}
+function cLabel(){if(S.dl===0)return'集团';if(S.dl===1)return MD.org[S.ck].label;if(S.dl===2){for(const ck of Object.keys(MD.org)){if(MD.org[ck].segs[S.bk])return MD.org[ck].segs[S.bk].label;}return S.bk;}if(S.dl===3)return MD.RL[S.rk];if(S.dl>=4)return MD.RL[S.ctry]||'';return'';}
+function ctryFilter(){return S.dl>=4?S.ctry:null;}
+
 function getChildren(){
   if(S.dl===0)return Object.keys(MD.org).map(ck=>({k:ck,l:MD.org[ck].label,rks:MD.gK(ck),nl:1,sk:'ck'}));
   if(S.dl===1){const c=MD.org[S.ck];return Object.keys(c.segs).map(sk=>({k:sk,l:c.segs[sk].label,rks:c.segs[sk].rgs,nl:2,sk:'bk'}));}
   if(S.dl===2)return MD.bK(S.bk).map(rk=>({k:rk,l:MD.RL[rk],rks:[rk],nl:3,sk:'rk'}));
+  /* 国际: dl=3 返回国家列表 */
+  if(S.dl===3&&isIntlCtx()&&MD.ctryMap[S.rk]){
+    return MD.ctryMap[S.rk].map(c=>({k:c.id,l:c.label,rks:[S.rk],ctryId:c.id,nl:4,sk:'ctry'}));
+  }
   return[];
 }
-/* 判断当前是否为国际板块 */
 function isIntlCtx(){
   if(S.dl===0)return false;
   if(S.dl===1)return S.ck==='intl';
   if(S.dl>=2){for(const bk of Object.keys(MD.org.intl.segs)){if(S.bk===bk)return true;} const irks=new Set(MD.gK('intl'));return irks.has(S.rk);}
   return false;
 }
+/* 判断是否显示人员列表(国内dl>=3, 国际dl>=4 或国家只有1个) */
+function showPersonLevel(){
+  if(!isIntlCtx())return S.dl>=3;
+  if(S.dl>=4)return true;
+  if(S.dl===3&&MD.ctryMap[S.rk]&&MD.ctryMap[S.rk].length<=1)return true;
+  return false;
+}
 
 /* ===== 聚合月度 ===== */
-function aggMo(ks){
+function aggMo(ks,cf){
   const arr=[];for(let m=1;m<=12;m++){const e={m,rT:0,rA:0,rF:0,sT:0,sA:0,sF:0,cT:0,cA:0,cF:0};let ha=false;
-    ks.forEach(rk=>{(MD.mgrs[rk]||[]).forEach(mg=>{const md=mg.s.mo.find(x=>x.m===m);if(md){e.rT+=md.rT||0;e.sT+=md.sT||0;e.cT+=md.cT||0;if(md.rA!=null){e.rA+=md.rA;e.sA+=md.sA||0;e.cA+=md.cA||0;ha=true;}else{e.rF+=md.rF||0;e.sF+=md.sF||0;e.cF+=md.cF||0;}}});});
+    ks.forEach(rk=>{(MD.mgrs[rk]||[]).forEach(mg=>{
+      if(cf&&mg.ctry!==cf)return;
+      const md=mg.s.mo.find(x=>x.m===m);if(md){e.rT+=md.rT||0;e.sT+=md.sT||0;e.cT+=md.cT||0;if(md.rA!=null){e.rA+=md.rA;e.sA+=md.sA||0;e.cA+=md.cA||0;ha=true;}else{e.rF+=md.rF||0;e.sF+=md.sF||0;e.cF+=md.cF||0;}}});});
     if(!ha){e.rA=null;e.sA=null;e.cA=null;}else{e.rF=null;e.sF=null;e.cF=null;}arr.push(e);}return arr;
 }
 
@@ -363,7 +450,7 @@ const R={
     ['domestic','intl'].forEach(ck=>{
       const ks=MD.gK(ck),sss=MD.aS(ks),ooo=MD.aO(ks),ppp=MD.aP(ks),eee=MD.aE(ks);
       const rr=sss.rev.ann>0?sss.rev.ytd/sss.rev.ann*100:0,sr=sss.ship.ann>0?sss.ship.ytd/sss.ship.ann*100:0,cr2=sss.coll.ann>0?sss.coll.ytd/sss.coll.ann*100:0;
-      const rm2=sss.rev.ann-sss.rev.ytd,g2=rm2-ooo.oh-ooo.hp,cv2=rm2>0?(ooo.oh+ooo.hp)/rm2*100:999;
+      const rm2=sss.rev.ann-sss.rev.ytd,cv2=rm2>0?(ooo.oh+ooo.hp)/rm2*100:999;
       const tmg=ppp.reduce((s,p)=>s+p.mg,0),trv=ppp.reduce((s,p)=>s+p.rv,0),amr=trv>0?tmg/trv*100:0;
       const card=U.h('div','mod-card');
       card.innerHTML='<div class="mod-title"><span style="font-size:18px">'+MD.org[ck].label+'</span><span class="mod-drill">查看详情 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span></div>'+
@@ -390,68 +477,92 @@ const R={
 
   detail(){
     const el=U.el('main');el.innerHTML='';
-    const ks=cKeys(),cl=cLabel(),ss=MD.aS(ks),opp=MD.aO(ks),prod=MD.aP(ks),exp=MD.aE(ks);
+    const cf=ctryFilter();
+    const ks=cKeys(),cl=cLabel(),ss=cf?MD.aSCtry(S.rk,cf):MD.aS(ks),opp=MD.aO(ks,cf),prod=MD.aP(ks),exp=MD.aE(ks);
     const ch=getChildren();
     const intl=isIntlCtx();
+    const showPerson=showPersonLevel();
 
-    /* ====== 一、销售三大指标 ====== */
+    /* ====== 一、销售三大指标(增强:同比+完成率+累计差额) ====== */
     el.appendChild(U.h('div','st','一、销售三大指标'));
+    if(intl) el.appendChild(U.h('div','','<div style="margin:-8px 0 10px;font-size:12px;color:var(--c3)">* 国际发货完成率 = 国际对外发货(含铺货+终端) / 发货大纲月度累计目标</div>'));
     const g1=U.h('div','kg c6');
     [{l:'收入',d:ss.rev},{l:'发货',d:ss.ship},{l:'回款',d:ss.coll}].forEach(ind=>{
-      const rate=ind.d.ann>0?ind.d.ytd/ind.d.ann*100:0,vp=ind.d.prev>0?(ind.d.ytd-ind.d.prev)/ind.d.prev*100:0;
-      const c1=U.h('div','kc');c1.innerHTML='<div class="ki bl">'+ind.l.slice(0,1)+'</div><div class="kl">'+ind.l+'目标 / 累计</div><div class="kv" style="font-size:20px">'+U.fmt(ind.d.ytd)+' <span style="font-size:12px;color:var(--c3)">/ '+U.fmt(ind.d.ann)+'</span></div>';g1.appendChild(c1);
-      const c2=U.h('div','kc '+(rate>=80?'ok':rate>=50?'mid':'w'));c2.innerHTML='<div class="ki '+(rate>=80?'gn':rate>=50?'og':'rd')+'">'+ind.l.slice(0,1)+'</div><div class="kl">'+ind.l+'达成率</div><div class="kv '+(rate>=80?'gn':rate>=50?'ye':'rd')+'" style="font-size:20px">'+U.fP(rate)+'</div><div class="ks">较同期: '+U.fD(vp)+'</div>';g1.appendChild(c2);
+      const rate=ind.d.ann>0?ind.d.ytd/ind.d.ann*100:0;
+      const vp=ind.d.prev>0?(ind.d.ytd-ind.d.prev)/ind.d.prev*100:0;
+      const diff=ind.d.ytd-Math.round(ind.d.ann/12*3); /* 累计差额(vs按月均进度) */
+      const c1=U.h('div','kc');c1.innerHTML='<div class="ki bl">'+ind.l.slice(0,1)+'</div><div class="kl">'+ind.l+'目标 / 累计</div><div class="kv" style="font-size:20px">'+U.fmt(ind.d.ytd)+' <span style="font-size:12px;color:var(--c3)">/ '+U.fmt(ind.d.ann)+'</span></div><div class="ks">累计差额: '+U.fDA(diff)+'</div>';g1.appendChild(c1);
+      const c2=U.h('div','kc '+(rate>=80?'ok':rate>=50?'mid':'w'));c2.innerHTML='<div class="ki '+(rate>=80?'gn':rate>=50?'og':'rd')+'">'+ind.l.slice(0,1)+'</div><div class="kl">'+ind.l+'达成率 / 同比</div><div class="kv '+(rate>=80?'gn':rate>=50?'ye':'rd')+'" style="font-size:20px">'+U.fP(rate)+'</div><div class="ks">同比: '+U.fD(vp)+'</div>';g1.appendChild(c2);
     });
     el.appendChild(g1);
+    /* 下级单位表(增加同比+差额列) */
     if(ch.length>0){
-      const rows=ch.map(c=>{const s=MD.aS(c.rks);return{_k:c.k,_l:c.l,_nl:c.nl,_sk:c.sk,label:c.l,rT:s.rev.ann,rY:s.rev.ytd,rR:s.rev.ann>0?s.rev.ytd/s.rev.ann*100:0,sT:s.ship.ann,sY:s.ship.ytd,sR:s.ship.ann>0?s.ship.ytd/s.ship.ann*100:0,cT:s.coll.ann,cY:s.coll.ytd,cR:s.coll.ann>0?s.coll.ytd/s.coll.ann*100:0};});
-      const sm={_s:true,label:'合计',rT:ss.rev.ann,rY:ss.rev.ytd,rR:ss.rev.ann>0?ss.rev.ytd/ss.rev.ann*100:0,sT:ss.ship.ann,sY:ss.ship.ytd,sR:ss.ship.ann>0?ss.ship.ytd/ss.ship.ann*100:0,cT:ss.coll.ann,cY:ss.coll.ytd,cR:ss.coll.ann>0?ss.coll.ytd/ss.coll.ann*100:0};
-      buildT(el,[{key:'label',label:'单位',w:150},{key:'rT',label:'收入目标(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'rY',label:'收入累计(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'rR',label:'收入达成率',w:85,align:'ct',render:v=>U.ltH(v)},{key:'sT',label:'发货目标(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'sY',label:'发货累计(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'sR',label:'发货达成率',w:85,align:'ct',render:v=>U.ltH(v)},{key:'cT',label:'回款目标(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'cY',label:'回款累计(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'cR',label:'回款达成率',w:85,align:'ct',render:v=>U.ltH(v)}],rows.concat([sm]),{click:true,onClick(r){const u={};u[r._sk]=r._k;Nav.drill(r._l,r._nl,u);}});
+      const rows=ch.map(c=>{
+        const s=c.ctryId?MD.aSCtry(c.rks[0],c.ctryId):MD.aS(c.rks);
+        const rDiff=s.rev.ytd-Math.round(s.rev.ann/12*3);
+        const rYoY=s.rev.prev>0?(s.rev.ytd-s.rev.prev)/s.rev.prev*100:0;
+        return{_k:c.k,_l:c.l,_nl:c.nl,_sk:c.sk,_ctryId:c.ctryId,label:c.l,
+          rT:s.rev.ann,rY:s.rev.ytd,rR:s.rev.ann>0?s.rev.ytd/s.rev.ann*100:0,rYoY,rDiff,
+          sT:s.ship.ann,sY:s.ship.ytd,sR:s.ship.ann>0?s.ship.ytd/s.ship.ann*100:0,
+          cT:s.coll.ann,cY:s.coll.ytd,cR:s.coll.ann>0?s.coll.ytd/s.coll.ann*100:0};});
+      const sm={_s:true,label:'合计',rT:ss.rev.ann,rY:ss.rev.ytd,rR:ss.rev.ann>0?ss.rev.ytd/ss.rev.ann*100:0,rYoY:ss.rev.prev>0?(ss.rev.ytd-ss.rev.prev)/ss.rev.prev*100:0,rDiff:ss.rev.ytd-Math.round(ss.rev.ann/12*3),sT:ss.ship.ann,sY:ss.ship.ytd,sR:ss.ship.ann>0?ss.ship.ytd/ss.ship.ann*100:0,cT:ss.coll.ann,cY:ss.coll.ytd,cR:ss.coll.ann>0?ss.coll.ytd/ss.coll.ann*100:0};
+      buildT(el,[{key:'label',label:'单位',w:130},{key:'rT',label:'收入目标',w:85,align:'r',render:v=>U.fN(v)},{key:'rY',label:'收入累计',w:85,align:'r',render:v=>U.fN(v)},{key:'rR',label:'完成率',w:75,align:'ct',render:v=>U.ltH(v)},{key:'rYoY',label:'同比',w:70,align:'ct',render:v=>U.fD(v)},{key:'rDiff',label:'累计差额',w:80,align:'r',render:v=>U.fDA(v)},
+        {key:'sT',label:'发货目标',w:85,align:'r',render:v=>U.fN(v)},{key:'sY',label:'发货累计',w:85,align:'r',render:v=>U.fN(v)},{key:'sR',label:'发货完成率',w:80,align:'ct',render:v=>U.ltH(v)},
+        {key:'cT',label:'回款目标',w:85,align:'r',render:v=>U.fN(v)},{key:'cY',label:'回款累计',w:85,align:'r',render:v=>U.fN(v)},{key:'cR',label:'回款完成率',w:80,align:'ct',render:v=>U.ltH(v)}],
+        rows.concat([sm]),{click:true,onClick(r){const u={};u[r._sk]=r._k;if(r._ctryId)u.ctry=r._ctryId;Nav.drill(r._l,r._nl,u);}});
     }
-    if(S.dl>=3){
-      const ms=MD.gMgrs(S.rk).map(m=>{const s=m.s;return{name:m.name,rT:s.rev.ann,rY:s.rev.ytd,rR:s.rev.ann>0?s.rev.ytd/s.rev.ann*100:0,sY:s.ship.ytd,sR:s.ship.ann>0?s.ship.ytd/s.ship.ann*100:0,cY:s.coll.ytd,cR:s.coll.ann>0?s.coll.ytd/s.coll.ann*100:0,vp:s.rev.prev>0?(s.rev.ytd-s.rev.prev)/s.rev.prev*100:0};});
-      if(ms.length)buildT(el,[{key:'name',label:'业务经理',w:110},{key:'rT',label:'收入目标',w:85,align:'r',render:v=>U.fN(v)},{key:'rY',label:'收入累计',w:85,align:'r',render:v=>U.fN(v)},{key:'rR',label:'收入达成率',w:80,align:'ct',render:v=>U.ltH(v)},{key:'sY',label:'发货累计',w:85,align:'r',render:v=>U.fN(v)},{key:'sR',label:'发货达成率',w:80,align:'ct',render:v=>U.ltH(v)},{key:'cY',label:'回款累计',w:85,align:'r',render:v=>U.fN(v)},{key:'cR',label:'回款达成率',w:80,align:'ct',render:v=>U.ltH(v)},{key:'vp',label:'较同期',w:70,align:'ct',render:v=>U.fD(v)}],ms);
+    /* 人员级销售明细 */
+    if(showPerson){
+      const ms=MD.gMgrsFiltered(S.rk,cf).map(m=>{const s=m.s;return{name:m.name,rT:s.rev.ann,rY:s.rev.ytd,rR:s.rev.ann>0?s.rev.ytd/s.rev.ann*100:0,rYoY:s.rev.prev>0?(s.rev.ytd-s.rev.prev)/s.rev.prev*100:0,rDiff:s.rev.ytd-Math.round(s.rev.ann/12*3),sY:s.ship.ytd,sR:s.ship.ann>0?s.ship.ytd/s.ship.ann*100:0,cY:s.coll.ytd,cR:s.coll.ann>0?s.coll.ytd/s.coll.ann*100:0};});
+      if(ms.length)buildT(el,[{key:'name',label:'销售经理',w:110},{key:'rT',label:'收入目标',w:85,align:'r',render:v=>U.fN(v)},{key:'rY',label:'收入累计',w:85,align:'r',render:v=>U.fN(v)},{key:'rR',label:'完成率',w:75,align:'ct',render:v=>U.ltH(v)},{key:'rYoY',label:'同比',w:65,align:'ct',render:v=>U.fD(v)},{key:'rDiff',label:'差额',w:75,align:'r',render:v=>U.fDA(v)},{key:'sY',label:'发货累计',w:85,align:'r',render:v=>U.fN(v)},{key:'sR',label:'发货完成率',w:80,align:'ct',render:v=>U.ltH(v)},{key:'cY',label:'回款累计',w:85,align:'r',render:v=>U.fN(v)},{key:'cR',label:'回款完成率',w:80,align:'ct',render:v=>U.ltH(v)}],ms);
     }
-    const cw1=U.h('div','cr c3');const amo=aggMo(ks);
+    const cw1=U.h('div','cr c3');const amo=aggMo(ks,cf);
     [{k:'rev',t:'收入月度趋势'},{k:'ship',t:'发货月度趋势'},{k:'coll',t:'回款月度趋势'}].forEach(ct=>{const b=U.h('div','cb');b.innerHTML='<div class="ct2">'+ct.t+'</div>';const cd=U.h('div','cc');cd.id='c-d-'+ct.k;b.appendChild(cd);cw1.appendChild(b);});
     el.appendChild(cw1);
     setTimeout(()=>{['rev','ship','coll'].forEach(k=>{CF.mk(U.el('c-d-'+k),()=>CF.s3(amo,k));});},100);
 
-    /* ====== 二、商机管理(国际增强:4档概率+覆盖率) ====== */
+    /* ====== 二、商机管理(增强:8个新运营指标) ====== */
     el.appendChild(U.h('div','st','二、商机管理'));
     const rem=ss.rev.ann-ss.rev.ytd,gap=rem-opp.oh-opp.hp;
-    /* 国际:3个月覆盖率 */
-    const t3m=intl?Math.round(ss.rev.ann/12*3):0;
-    const covAll=intl&&t3m>0?(opp.to+opp.oh)/t3m*100:0;
-    const cov50=intl&&t3m>0?(opp.p50+opp.oh)/t3m*100:0;
+    const t3m=Math.round(ss.rev.ann/12*3);
+    const covAll=t3m>0?(opp.to+opp.oh)/t3m*100:0;
+    const cov50=t3m>0?(opp.p50+opp.oh)/t3m*100:0;
     const c50=rem>0?(opp.oh+opp.hp)/rem*100:999;
 
     if(intl){
-      /* 国际商机KPI：4档概率 + 在手订单 + 覆盖率 */
+      /* 国际商机KPI: 原有 + 8个新指标 */
       const g2i=U.h('div','kg');
       [{l:'有效商机条数',v:U.fN(opp.pCnt)+'条',co:'pu'},{l:'有效商机总额',v:U.fmt(opp.to),co:'bl'},
-       {l:'≥50%概率商机',v:U.fmt(opp.p50),co:'tl'},{l:'在手订单(已签未执行)',v:U.fmt(opp.oh),co:'gn'},
-       {l:'3个月覆盖率',v:U.fP(covAll),co:covAll>=100?'gn':covAll>=80?'og':'rd'},
-       {l:'50%概率覆盖率',v:U.fP(cov50),co:cov50>=100?'gn':cov50>=80?'og':'rd'},
+       {l:'>=50%概率商机',v:U.fmt(opp.p50),co:'tl'},{l:'在手订单(已签未执行)',v:U.fmt(opp.oh),co:'gn'},
+       {l:'未来3个月覆盖率',v:U.fP(covAll),co:covAll>=100?'gn':covAll>=80?'og':'rd'},
+       {l:'50%覆盖率(vs剩余目标)',v:U.fP(c50),co:c50>=100?'gn':c50>=80?'og':'rd'},
        {l:'商机缺口',v:gap>0?U.fmt(gap):'无缺口',co:gap>0?'rd':'gn'},
-       {l:'50%覆盖率(vs剩余目标)',v:U.fP(c50),co:c50>=100?'gn':c50>=80?'og':'rd'}
+       {l:'商机月度更新率',v:U.fP(opp.oppUpd),co:opp.oppUpd>=80?'gn':opp.oppUpd>=60?'og':'rd'},
+       {l:'商机拜访率',v:U.fP(opp.oppVisit),co:opp.oppVisit>=70?'gn':opp.oppVisit>=50?'og':'rd'},
+       {l:'50%+商机面对面拜访率',v:U.fP(opp.opp50F2F),co:opp.opp50F2F>=60?'gn':opp.opp50F2F>=40?'og':'rd'},
+       {l:'商机转化率',v:U.fP(opp.oppConv),co:opp.oppConv>=25?'gn':opp.oppConv>=15?'og':'rd'},
+       {l:'丢单率',v:U.fP(opp.oppLost),co:opp.oppLost<=10?'gn':opp.oppLost<=15?'og':'rd'},
+       {l:'失效率',v:U.fP(opp.oppExpire),co:opp.oppExpire<=8?'gn':opp.oppExpire<=12?'og':'rd'},
+       {l:'过账预测偏差率',v:U.fP(Math.abs(opp.fcDev)),co:Math.abs(opp.fcDev)<=10?'gn':Math.abs(opp.fcDev)<=20?'og':'rd'}
       ].forEach(k=>{
         const cls=k.l.includes('缺口')?(gap>0?'w':'ok'):k.l.includes('覆盖')?(parseFloat(k.v)>=100?'ok':parseFloat(k.v)>=80?'mid':'w'):'';
-        const c=U.h('div','kc '+cls);c.innerHTML='<div class="ki '+k.co+'">'+k.l.slice(0,1)+'</div><div class="kl">'+k.l+'</div><div class="kv" style="font-size:20px">'+k.v+'</div>';g2i.appendChild(c);});
+        const c=U.h('div','kc '+cls);c.innerHTML='<div class="ki '+k.co+'">'+k.l.slice(0,1)+'</div><div class="kl">'+k.l+'</div><div class="kv" style="font-size:18px">'+k.v+'</div>';g2i.appendChild(c);});
       el.appendChild(g2i);
       /* 4档概率分布表 */
       el.appendChild(U.h('div','','<div style="margin:10px 0 6px;font-size:13px;color:var(--c2);font-weight:500">概率分档明细（万元）</div>'));
       if(ch.length>0){
-        const ur=ch.map(c=>{const o=MD.aO(c.rks),s=MD.aS(c.rks),rm=s.rev.ann-s.rev.ytd,tm=Math.round(s.rev.ann/12*3);
-          return{_k:c.k,_l:c.l,_nl:c.nl,_sk:c.sk,label:c.l,cnt:o.pCnt,p25:o.pl4.p25,p2550:o.pl4.p2550,p5075:o.pl4.p5075,p75:o.pl4.p75,total:o.to,p50:o.p50,oh:o.oh,
-            covAll:tm>0?(o.to+o.oh)/tm*100:0,cov50:tm>0?(o.p50+o.oh)/tm*100:0,c50:rm>0?(o.oh+o.hp)/rm*100:999};});
-        const sm={_s:true,label:'合计',cnt:opp.pCnt,p25:opp.pl4.p25,p2550:opp.pl4.p2550,p5075:opp.pl4.p5075,p75:opp.pl4.p75,total:opp.to,p50:opp.p50,oh:opp.oh,covAll,cov50,c50};
-        buildT(el,[{key:'label',label:'单位',w:130},{key:'cnt',label:'商机条数',w:70,align:'r',render:v=>U.fN(v)},
-          {key:'p25',label:'≤25%(万)',w:80,align:'r',render:v=>U.fN(v)},{key:'p2550',label:'25-50%(万)',w:85,align:'r',render:v=>U.fN(v)},
-          {key:'p5075',label:'50-75%(万)',w:85,align:'r',render:v=>U.fN(v)},{key:'p75',label:'≥75%(万)',w:80,align:'r',render:v=>U.fN(v)},
-          {key:'total',label:'商机总额',w:85,align:'r',render:v=>U.fN(v)},{key:'oh',label:'在手订单',w:85,align:'r',render:v=>U.fN(v)},
-          {key:'covAll',label:'3月覆盖率',w:85,align:'ct',render:v=>U.ltH(v)},{key:'cov50',label:'50%覆盖率',w:85,align:'ct',render:v=>U.ltH(v)}],
-          ur.concat([sm]),{click:true,onClick(r){const u={};u[r._sk]=r._k;Nav.drill(r._l,r._nl,u);}});
+        const ur=ch.map(c=>{const o=MD.aO(c.rks,c.ctryId),s=c.ctryId?MD.aSCtry(c.rks[0],c.ctryId):MD.aS(c.rks),rm=s.rev.ann-s.rev.ytd,tm=Math.round(s.rev.ann/12*3);
+          return{_k:c.k,_l:c.l,_nl:c.nl,_sk:c.sk,_ctryId:c.ctryId,label:c.l,cnt:o.pCnt,p25:o.pl4.p25,p2550:o.pl4.p2550,p5075:o.pl4.p5075,p75:o.pl4.p75,total:o.to,p50:o.p50,oh:o.oh,
+            covAll:tm>0?(o.to+o.oh)/tm*100:0,cov50:tm>0?(o.p50+o.oh)/tm*100:0,
+            updR:o.oppUpd,convR:o.oppConv,lostR:o.oppLost,c50:rm>0?(o.oh+o.hp)/rm*100:999};});
+        const sm={_s:true,label:'合计',cnt:opp.pCnt,p25:opp.pl4.p25,p2550:opp.pl4.p2550,p5075:opp.pl4.p5075,p75:opp.pl4.p75,total:opp.to,p50:opp.p50,oh:opp.oh,covAll,cov50,updR:opp.oppUpd,convR:opp.oppConv,lostR:opp.oppLost,c50};
+        buildT(el,[{key:'label',label:'单位',w:110},{key:'cnt',label:'条数',w:55,align:'r',render:v=>U.fN(v)},
+          {key:'p25',label:'<=25%',w:65,align:'r',render:v=>U.fN(v)},{key:'p2550',label:'25-50%',w:70,align:'r',render:v=>U.fN(v)},
+          {key:'p5075',label:'50-75%',w:70,align:'r',render:v=>U.fN(v)},{key:'p75',label:'>=75%',w:65,align:'r',render:v=>U.fN(v)},
+          {key:'total',label:'商机总额',w:80,align:'r',render:v=>U.fN(v)},{key:'oh',label:'在手订单',w:80,align:'r',render:v=>U.fN(v)},
+          {key:'covAll',label:'3月覆盖率',w:80,align:'ct',render:v=>U.ltH(v)},{key:'updR',label:'更新率',w:65,align:'ct',render:v=>U.fP(v)},
+          {key:'convR',label:'转化率',w:65,align:'ct',render:v=>U.fP(v)},{key:'lostR',label:'丢单率',w:65,align:'ct',render:v=>U.fP(v)}],
+          ur.concat([sm]),{click:true,onClick(r){const u={};u[r._sk]=r._k;if(r._ctryId)u.ctry=r._ctryId;Nav.drill(r._l,r._nl,u);}});
       }
     } else {
       /* 国内商机（简版） */
@@ -466,77 +577,84 @@ const R={
         buildT(el,[{key:'label',label:'单位',w:150},{key:'rem',label:'剩余目标(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'oh',label:'在手订单(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'to',label:'有效商机(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'hp',label:'高概率(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'gap',label:'缺口(万)',w:90,align:'r',render:v=>v>0?'<span class="dn">'+U.fN(v)+'</span>':'<span class="dp">无</span>'},{key:'c50',label:'50%覆盖率',w:90,align:'ct',render:v=>U.ltH(v)}],ur.concat([sm]),{click:true,onClick(r){const u={};u[r._sk]=r._k;Nav.drill(r._l,r._nl,u);}});
       }
     }
-    /* 商机图表(通用) */
+    /* 商机图表 */
     if(ch.length>0){
       const cwO=U.h('div','cr');
       const bO=U.h('div','cb');bO.innerHTML='<div class="ct2">商机分概率堆叠 vs 剩余目标</div>';const cdO=U.h('div','cc');cdO.id='c-opp';bO.appendChild(cdO);cwO.appendChild(bO);
       const bT=U.h('div','cb');bT.innerHTML='<div class="ct2">覆盖率总览</div>';const cdT=U.h('div','');cdT.id='c-otl';cdT.style.padding='10px';bT.appendChild(cdT);cwO.appendChild(bT);
       el.appendChild(cwO);
       setTimeout(()=>{
-        const gk=c=>(c.sk==='ck'?MD.gK(c.k):c.sk==='bk'?MD.bK(c.k):[c.k]);
-        const lb=ch.map(r=>r.l),od=ch.map(c=>{const pp=MD.aO(gk(c)).pipe,b={p75:0,p50:0,p25:0,p0:0};pp.forEach(p=>{if(p.pb>=75)b.p75+=p.am;else if(p.pb>=50)b.p50+=p.am;else if(p.pb>=25)b.p25+=p.am;else b.p0+=p.am;});return b;});
-        const rmArr=ch.map(c=>{const ss2=MD.aS(gk(c));return ss2.rev.ann-ss2.rev.ytd;});
+        const gk=c=>(c.sk==='ck'?MD.gK(c.k):c.sk==='bk'?MD.bK(c.k):[c.rks?c.rks[0]:c.k]);
+        const lb=ch.map(r=>r.l),od=ch.map(c=>{const pp=MD.aO(gk(c),c.ctryId).pipe,b={p75:0,p50:0,p25:0,p0:0};pp.forEach(p=>{if(p.pb>=75)b.p75+=p.am;else if(p.pb>=50)b.p50+=p.am;else if(p.pb>=25)b.p25+=p.am;else b.p0+=p.am;});return b;});
+        const rmArr=ch.map(c=>{const ss2=c.ctryId?MD.aSCtry(c.rks[0],c.ctryId):MD.aS(gk(c));return ss2.rev.ann-ss2.rev.ytd;});
         CF.mk(U.el('c-opp'),()=>CF.opS(lb,od,rmArr));
         const tc=U.el('c-otl'),tg=U.h('div','tg');
-        ch.forEach(c=>{const ss2=MD.aS(gk(c)),o2=MD.aO(gk(c)),rr=ss2.rev.ann>0?ss2.rev.ytd/ss2.rev.ann*100:0,rm2=ss2.rev.ann-ss2.rev.ytd,cv2=rm2>0?(o2.oh+o2.hp)/rm2*100:999;
-          const cc2=U.h('div','tc');cc2.innerHTML='<div class="tn">'+c.l+'</div><div class="trow"><span>50%覆盖率</span><span class="tv">'+U.ltH(cv2)+'</span></div><div class="trow"><span>收入达成率</span><span class="tv">'+U.fP(rr)+'</span></div>';tg.appendChild(cc2);});
+        ch.forEach(c=>{const ss2=c.ctryId?MD.aSCtry(c.rks[0],c.ctryId):MD.aS(gk(c)),o2=MD.aO(gk(c),c.ctryId),rr=ss2.rev.ann>0?ss2.rev.ytd/ss2.rev.ann*100:0,rm2=ss2.rev.ann-ss2.rev.ytd,cv2=rm2>0?(o2.oh+o2.hp)/rm2*100:999;
+          const cc2=U.h('div','tc');cc2.innerHTML='<div class="tn">'+c.l+'</div><div class="trow"><span>未来3月覆盖率</span><span class="tv">'+U.ltH(cv2)+'</span></div><div class="trow"><span>收入达成率</span><span class="tv">'+U.fP(rr)+'</span></div>';tg.appendChild(cc2);});
         tc.appendChild(tg);
       },100);
     }
-    if(S.dl>=2&&opp.pipe.length>0){
+    if(showPerson&&opp.pipe.length>0){
       el.appendChild(U.h('div','','<div style="margin-top:8px"></div>'));
-      const plCols=[{key:'ow',label:'负责人',w:110},{key:'rg',label:'区域',w:80},{key:'cu',label:'客户',w:120},{key:'pr',label:'产品型号',w:100},{key:'am',label:'金额(万)',w:80,align:'r',render:v=>U.fN(v)},{key:'pb',label:'成单概率',w:80,align:'ct',render:v=>U.pB(v)},{key:'mn',label:'过账月',w:70,align:'ct',render:v=>v+'月'},{key:'st',label:'状态',w:75,align:'ct',render:v=>U.sB(v)}];
-      buildT(el,plCols,opp.pipe.sort((a,b)=>b.pb-a.pb));
+      buildT(el,[{key:'ow',label:'负责人',w:110},{key:'rg',label:'区域',w:80},{key:'cu',label:'客户',w:120},{key:'pr',label:'产品型号',w:100},{key:'am',label:'金额(万)',w:80,align:'r',render:v=>U.fN(v)},{key:'pb',label:'成单概率',w:80,align:'ct',render:v=>U.pB(v)},{key:'mn',label:'过账月',w:70,align:'ct',render:v=>v+'月'},{key:'st',label:'状态',w:75,align:'ct',render:v=>U.sB(v)}],opp.pipe.sort((a,b)=>b.pb-a.pb));
     }
 
-    /* ====== 三、产品毛利分析(国际增强:月度趋势) ====== */
+    /* ====== 三、产品毛利分析(增强:预算毛利+偏差+溢价率) ====== */
     el.appendChild(U.h('div','st','三、产品毛利分析'));
-    const bt={};prod.forEach(p=>{if(!bt[p.mt])bt[p.mt]={t:p.mt,q:0,rv:0,mg:0,pd:0};bt[p.mt].q+=p.q;bt[p.mt].rv+=p.rv;bt[p.mt].mg+=p.mg;bt[p.mt].pd+=p.pd;});
-    const trr=Object.values(bt).map(t=>({...t,mr:t.rv>0?t.mg/t.rv*100:0}));
-    const tot={_s:true,t:'合计',q:trr.reduce((s,r)=>s+r.q,0),rv:trr.reduce((s,r)=>s+r.rv,0),mg:trr.reduce((s,r)=>s+r.mg,0),pd:trr.reduce((s,r)=>s+r.pd,0)};tot.mr=tot.rv>0?tot.mg/tot.rv*100:0;
+    const bt={};prod.forEach(p=>{if(!bt[p.mt])bt[p.mt]={t:p.mt,q:0,rv:0,mg:0,bMg:0,pd:0,premSum:0,premCnt:0};bt[p.mt].q+=p.q;bt[p.mt].rv+=p.rv;bt[p.mt].mg+=p.mg;bt[p.mt].bMg+=p.bMg;bt[p.mt].pd+=p.pd;bt[p.mt].premSum+=p.premRate;bt[p.mt].premCnt++;});
+    const trr=Object.values(bt).map(t=>({...t,mr:t.rv>0?t.mg/t.rv*100:0,bMr:MD.budgetMR[t.t]||30,mgDev:t.bMg>0?(t.mg-t.bMg)/t.bMg*100:0,premRate:t.premCnt>0?t.premSum/t.premCnt:0}));
+    const tot={_s:true,t:'合计',q:trr.reduce((s,r)=>s+r.q,0),rv:trr.reduce((s,r)=>s+r.rv,0),mg:trr.reduce((s,r)=>s+r.mg,0),bMg:trr.reduce((s,r)=>s+r.bMg,0),pd:trr.reduce((s,r)=>s+r.pd,0)};tot.mr=tot.rv>0?tot.mg/tot.rv*100:0;tot.bMr=tot.bMg>0&&tot.rv>0?tot.bMg/tot.rv*100:0;tot.mgDev=tot.bMg>0?(tot.mg-tot.bMg)/tot.bMg*100:0;tot.premRate=trr.reduce((s,r)=>s+r.premRate,0)/trr.length;
     const mrR=v=>{const c=v>=35?'color:var(--grn)':v>=25?'color:#d48806':'color:var(--red)';return'<span style="'+c+';font-weight:600">'+U.fP(v)+'</span>';};
-    buildT(el,[{key:'t',label:'机型大类',w:110},{key:'q',label:'销量(台)',w:75,align:'r',render:v=>U.fN(v)},{key:'rv',label:'收入(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'mg',label:'毛利(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'mr',label:'毛利率',w:80,align:'ct',render:mrR},{key:'pd',label:'价差(万)',w:80,align:'r',render:v=>U.fDA(v)}],trr.concat([tot]));
+    buildT(el,[{key:'t',label:'产品类型',w:100},{key:'q',label:'销量(台)',w:70,align:'r',render:v=>U.fN(v)},{key:'rv',label:'收入(万)',w:85,align:'r',render:v=>U.fN(v)},{key:'mg',label:'实际毛利',w:80,align:'r',render:v=>U.fN(v)},{key:'mr',label:'实际毛利率',w:80,align:'ct',render:mrR},{key:'bMg',label:'预算毛利',w:80,align:'r',render:v=>U.fN(v)},{key:'bMr',label:'预算毛利率',w:80,align:'ct',render:v=>U.fP(v)},{key:'mgDev',label:'偏差%',w:70,align:'ct',render:v=>U.fD(v)},{key:'premRate',label:'溢价率',w:70,align:'ct',render:v=>U.fD(v)},{key:'pd',label:'价差(万)',w:75,align:'r',render:v=>U.fDA(v)}],trr.concat([tot]));
     if(ch.length>0){
       el.appendChild(U.h('div','','<div style="margin:8px 0 4px;font-size:13px;color:var(--c2);font-weight:500">下级单位毛利对比</div>'));
-      const ur=ch.map(c=>{const p=MD.aP(c.rks),rv=p.reduce((s,x)=>s+x.rv,0),mg=p.reduce((s,x)=>s+x.mg,0);return{_k:c.k,_l:c.l,_nl:c.nl,_sk:c.sk,label:c.l,q:p.reduce((s,x)=>s+x.q,0),rv,mg,mr:rv>0?mg/rv*100:0,pd:p.reduce((s,x)=>s+x.pd,0)};});
-      buildT(el,[{key:'label',label:'单位',w:150},{key:'q',label:'销量(台)',w:75,align:'r',render:v=>U.fN(v)},{key:'rv',label:'收入(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'mg',label:'毛利(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'mr',label:'毛利率',w:80,align:'ct',render:mrR},{key:'pd',label:'价差(万)',w:80,align:'r',render:v=>U.fDA(v)}],ur,{click:true,onClick(r){const u={};u[r._sk]=r._k;Nav.drill(r._l,r._nl,u);}});
+      const ur=ch.map(c=>{const p=MD.aP(c.rks),rv=p.reduce((s,x)=>s+x.rv,0),mg=p.reduce((s,x)=>s+x.mg,0),bMg=p.reduce((s,x)=>s+x.bMg,0);
+        return{_k:c.k,_l:c.l,_nl:c.nl,_sk:c.sk,_ctryId:c.ctryId,label:c.l,q:p.reduce((s,x)=>s+x.q,0),rv,mg,mr:rv>0?mg/rv*100:0,bMg,bMr:rv>0?bMg/rv*100:0,mgDev:bMg>0?(mg-bMg)/bMg*100:0,pd:p.reduce((s,x)=>s+x.pd,0)};});
+      buildT(el,[{key:'label',label:'单位',w:130},{key:'q',label:'销量',w:65,align:'r',render:v=>U.fN(v)},{key:'rv',label:'收入',w:80,align:'r',render:v=>U.fN(v)},{key:'mg',label:'实际毛利',w:80,align:'r',render:v=>U.fN(v)},{key:'mr',label:'毛利率',w:70,align:'ct',render:mrR},{key:'bMg',label:'预算毛利',w:80,align:'r',render:v=>U.fN(v)},{key:'mgDev',label:'偏差%',w:65,align:'ct',render:v=>U.fD(v)},{key:'pd',label:'价差',w:70,align:'r',render:v=>U.fDA(v)}],ur,{click:true,onClick(r){const u={};u[r._sk]=r._k;if(r._ctryId)u.ctry=r._ctryId;Nav.drill(r._l,r._nl,u);}});
     }
     const cwM=U.h('div','cr'+(intl?' c3':''));
-    const bM1=U.h('div','cb');bM1.innerHTML='<div class="ct2">各机型毛利率对比</div>';const cdM1=U.h('div','cc');cdM1.id='c-mg';bM1.appendChild(cdM1);cwM.appendChild(bM1);
+    const bM1=U.h('div','cb');bM1.innerHTML='<div class="ct2">各产品类型毛利率(实际 vs 预算)</div>';const cdM1=U.h('div','cc');cdM1.id='c-mg';bM1.appendChild(cdM1);cwM.appendChild(bM1);
     const bM2=U.h('div','cb');bM2.innerHTML='<div class="ct2">收入结构占比</div>';const cdM2=U.h('div','cc');cdM2.id='c-mp';bM2.appendChild(cdM2);cwM.appendChild(bM2);
     if(intl){const bM3=U.h('div','cb');bM3.innerHTML='<div class="ct2">月度毛利率趋势监控</div>';const cdM3=U.h('div','cc');cdM3.id='c-mtrend';bM3.appendChild(cdM3);cwM.appendChild(bM3);}
     el.appendChild(cwM);
     setTimeout(()=>{
-      CF.mk(U.el('c-mg'),()=>CF.mgC(trr.map(t=>t.t),trr.map(t=>+t.mr.toFixed(1)),+tot.mr.toFixed(1)));
-      const po=CF.base();Object.assign(po,{tooltip:{trigger:'item',formatter:'{b}: {c}万 ({d}%)'},series:[{type:'pie',radius:['40%','70%'],center:['50%','55%'],data:trr.map(t=>({name:t.t,value:t.rv})),itemStyle:{borderRadius:6,borderColor:'#fff',borderWidth:2},label:{formatter:'{b}\n{d}%',fontSize:12},color:['#1677ff','#36cfc9','#73d13d','#faad14','#9254de','#ff7875']}]});
+      /* 毛利率图表:实际 vs 预算 */
+      const mgO=CF.base();Object.assign(mgO,{xAxis:{type:'category',data:trr.map(t=>t.t),axisLine:{lineStyle:{color:'#e8ecf0'}},axisLabel:{rotate:trr.length>6?25:0}},yAxis:{type:'value',name:'毛利率%',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}},axisLabel:{formatter:'{value}%'},max:60},series:[{name:'实际毛利率',type:'bar',data:trr.map(t=>+t.mr.toFixed(1)),itemStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'#52c41a'},{offset:1,color:'#73d13d'}]},borderRadius:[3,3,0,0]},barMaxWidth:30,label:{show:true,position:'top',formatter:'{c}%',fontSize:10,color:'#389e0d'}},{name:'预算毛利率',type:'bar',data:trr.map(t=>t.bMr),itemStyle:{color:'#d6e4ff',borderRadius:[3,3,0,0]},barMaxWidth:30}]});
+      CF.mk(U.el('c-mg'),mgO);
+      const po=CF.base();Object.assign(po,{tooltip:{trigger:'item',formatter:'{b}: {c}万 ({d}%)'},series:[{type:'pie',radius:['40%','70%'],center:['50%','55%'],data:trr.map(t=>({name:t.t,value:t.rv})),itemStyle:{borderRadius:6,borderColor:'#fff',borderWidth:2},label:{formatter:'{b}\n{d}%',fontSize:11},color:['#1677ff','#36cfc9','#73d13d','#faad14','#ff7875','#9254de','#13c2c2','#fa8c16']}]});
       CF.mk(U.el('c-mp'),po);
-      /* 国际:月度毛利趋势 */
       if(intl&&U.el('c-mtrend')){
         const mths=['1月','2月','3月'];const colors=['#1677ff','#52c41a','#fa8c16'];
         const buNames=[],buSeries=[];
-        if(ch.length>0){ch.forEach((c,ci)=>{
-          buNames.push(c.l);
-          const rates=mths.map(()=>+(25+Math.random()*15).toFixed(1));
-          buSeries.push({name:c.l,type:'line',data:rates,lineStyle:{width:2.5},symbol:'circle',symbolSize:8,itemStyle:{color:colors[ci%colors.length]}});
-        });}else{
-          buNames.push(cl);buSeries.push({name:cl,type:'line',data:mths.map(()=>+(25+Math.random()*15).toFixed(1)),lineStyle:{width:2.5},symbol:'circle',symbolSize:8,itemStyle:{color:'#1677ff'}});
-        }
+        if(ch.length>0){ch.forEach((c,ci)=>{buNames.push(c.l);buSeries.push({name:c.l,type:'line',data:mths.map(()=>+(25+Math.random()*15).toFixed(1)),lineStyle:{width:2.5},symbol:'circle',symbolSize:8,itemStyle:{color:colors[ci%colors.length]}});});}
+        else{buNames.push(cl);buSeries.push({name:cl,type:'line',data:mths.map(()=>+(25+Math.random()*15).toFixed(1)),lineStyle:{width:2.5},symbol:'circle',symbolSize:8,itemStyle:{color:'#1677ff'}});}
         CF.mk(U.el('c-mtrend'),()=>CF.mgTrend(mths,buSeries));
       }
     },100);
 
-    /* ====== 四、费用管理 ====== */
+    /* ====== 四、费用管理(增强:销售费用拆分) ====== */
     el.appendChild(U.h('div','st','四、费用管理'));
     const g4=U.h('div','kg');const t4=exp.tot;
     [{l:'累计费用',v:U.fmt(t4.a),sub:'预算: '+U.fmt(t4.b),co:'og'},{l:'期间费用率',v:U.fP(t4.rate),sub:'预算费用率: '+U.fP(t4.bR),co:t4.rate<=t4.bR?'gn':'rd'},{l:'较预算差异',v:U.fDA(t4.vsB),sub:U.fD(t4.vsBP),co:t4.vsB<=0?'gn':'rd'},{l:'较同期差异',v:U.fDA(t4.vsP),sub:U.fD(t4.vsPP),co:t4.vsP<=0?'gn':'og'}].forEach(k=>{const c=U.h('div','kc');c.innerHTML='<div class="ki '+k.co+'">'+k.l.slice(0,1)+'</div><div class="kl">'+k.l+'</div><div class="kv" style="font-size:20px">'+k.v+'</div><div class="ks">'+k.sub+'</div>';g4.appendChild(c);});
     el.appendChild(g4);
+    /* 销售费用细分(市场推广费/差旅费/招待费) */
+    if(intl){
+      el.appendChild(U.h('div','','<div style="margin:10px 0 6px;font-size:13px;color:var(--c2);font-weight:500">销售费用拆分明细</div>'));
+      let tMkt=0,tTrv=0,tEnt=0;
+      ks.forEach(rk=>{(MD.mgrs[rk]||[]).forEach(m=>{if(cf&&m.ctry!==cf)return;tMkt+=m.mktFee;tTrv+=m.trvFee;tEnt+=m.entFee;});});
+      const sfRows=[{nm:'市场推广费',a:tMkt,pct:tMkt+tTrv+tEnt>0?tMkt/(tMkt+tTrv+tEnt)*100:0},
+        {nm:'差旅费',a:tTrv,pct:tMkt+tTrv+tEnt>0?tTrv/(tMkt+tTrv+tEnt)*100:0},
+        {nm:'招待费',a:tEnt,pct:tMkt+tTrv+tEnt>0?tEnt/(tMkt+tTrv+tEnt)*100:0},
+        {_s:true,nm:'销售费用合计',a:tMkt+tTrv+tEnt,pct:100}];
+      buildT(el,[{key:'nm',label:'费用项',w:120},{key:'a',label:'金额(元)',w:120,align:'r',render:v=>U.fN(v)},{key:'pct',label:'占比',w:80,align:'ct',render:v=>U.fP(v)}],sfRows);
+    }
     const ir=exp.items.map(i=>({nm:i.nm,a:i.a,b:i.b,pb:i.pb,rate:i.rate,bR:i.bR,vsB:i.vsB,vsBP:i.vsBP,vsP:i.vsP,vsPP:i.vsPP}));
     const ft={_s:true,nm:'期间费用合计',a:t4.a,b:t4.b,pb:t4.pb,rate:t4.rate,bR:t4.bR,vsB:t4.vsB,vsBP:t4.vsBP,vsP:t4.vsP,vsPP:t4.vsPP};
-    buildT(el,[{key:'nm',label:'费用项目',w:110},{key:'a',label:'累计实际(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'b',label:'累计预算(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'pb',label:'配比额(万)',w:85,align:'r',render:v=>U.fN(v)},{key:'rate',label:'实际费用率',w:80,align:'ct',render:v=>U.fP(v)},{key:'bR',label:'预算费用率',w:80,align:'ct',render:v=>U.fP(v)},{key:'vsB',label:'较预算(万)',w:85,align:'r',render:v=>U.fDA(v)},{key:'vsBP',label:'较预算%',w:75,align:'ct',render:v=>U.fD(v)},{key:'vsP',label:'较同期(万)',w:85,align:'r',render:v=>U.fDA(v)},{key:'vsPP',label:'较同期%',w:75,align:'ct',render:v=>U.fD(v)}],ir.concat([ft]));
+    buildT(el,[{key:'nm',label:'费用项目',w:110},{key:'a',label:'累计实际(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'b',label:'累计预算(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'pb',label:'配比额(万)',w:80,align:'r',render:v=>U.fN(v)},{key:'rate',label:'实际费用率',w:75,align:'ct',render:v=>U.fP(v)},{key:'bR',label:'预算费用率',w:75,align:'ct',render:v=>U.fP(v)},{key:'vsB',label:'较预算(万)',w:80,align:'r',render:v=>U.fDA(v)},{key:'vsBP',label:'较预算%',w:70,align:'ct',render:v=>U.fD(v)},{key:'vsP',label:'较同期(万)',w:80,align:'r',render:v=>U.fDA(v)},{key:'vsPP',label:'较同期%',w:70,align:'ct',render:v=>U.fD(v)}],ir.concat([ft]));
     if(ch.length>0){
       el.appendChild(U.h('div','','<div style="margin:8px 0 4px;font-size:13px;color:var(--c2);font-weight:500">下级单位费用对比</div>'));
-      const ur=ch.map(c=>{const e=MD.aE(c.rks);return{_k:c.k,_l:c.l,_nl:c.nl,_sk:c.sk,label:c.l,rv:e.rv,a:e.tot.a,b:e.tot.b,rate:e.tot.rate,bR:e.tot.bR,vsB:e.tot.vsB,vsBP:e.tot.vsBP,vsPP:e.tot.vsPP};});
-      buildT(el,[{key:'label',label:'单位',w:150},{key:'rv',label:'收入(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'a',label:'费用(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'b',label:'预算(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'rate',label:'费用率',w:75,align:'ct',render:v=>U.fP(v)},{key:'bR',label:'预算费用率',w:80,align:'ct',render:v=>U.fP(v)},{key:'vsB',label:'较预算(万)',w:85,align:'r',render:v=>U.fDA(v)},{key:'vsBP',label:'较预算%',w:75,align:'ct',render:v=>U.fD(v)},{key:'vsPP',label:'较同期%',w:75,align:'ct',render:v=>U.fD(v)}],ur,{click:true,onClick(r){const u={};u[r._sk]=r._k;Nav.drill(r._l,r._nl,u);}});
+      const ur=ch.map(c=>{const e=MD.aE(c.rks);return{_k:c.k,_l:c.l,_nl:c.nl,_sk:c.sk,_ctryId:c.ctryId,label:c.l,rv:e.rv,a:e.tot.a,b:e.tot.b,rate:e.tot.rate,bR:e.tot.bR,vsB:e.tot.vsB,vsBP:e.tot.vsBP,vsPP:e.tot.vsPP};});
+      buildT(el,[{key:'label',label:'单位',w:130},{key:'rv',label:'收入(万)',w:85,align:'r',render:v=>U.fN(v)},{key:'a',label:'费用(万)',w:85,align:'r',render:v=>U.fN(v)},{key:'b',label:'预算(万)',w:85,align:'r',render:v=>U.fN(v)},{key:'rate',label:'费用率',w:70,align:'ct',render:v=>U.fP(v)},{key:'bR',label:'预算费用率',w:80,align:'ct',render:v=>U.fP(v)},{key:'vsB',label:'较预算(万)',w:80,align:'r',render:v=>U.fDA(v)},{key:'vsBP',label:'较预算%',w:70,align:'ct',render:v=>U.fD(v)},{key:'vsPP',label:'较同期%',w:70,align:'ct',render:v=>U.fD(v)}],ur,{click:true,onClick(r){const u={};u[r._sk]=r._k;if(r._ctryId)u.ctry=r._ctryId;Nav.drill(r._l,r._nl,u);}});
     }
     const cwE=U.h('div','cr');
     const bE1=U.h('div','cb');bE1.innerHTML='<div class="ct2">费用预算 vs 实际</div>';const cdE1=U.h('div','cc');cdE1.id='c-ex';bE1.appendChild(cdE1);cwE.appendChild(bE1);
@@ -554,7 +672,7 @@ const R={
     /* ====== 五、销售预测(国际专属) ====== */
     if(intl){
       el.appendChild(U.h('div','st','五、销售预测（已签合同 + 跟进商机）'));
-      const fc=MD.aFC(ks);
+      const fc=MD.aFC(ks,cf);
       const g5=U.h('div','kg c5');
       [{l:'年度目标',v:U.fmt(fc.annTgt),co:'bl'},{l:'一季度完成',v:U.fmt(fc.q1Act),sub:'完成率: '+U.fP(fc.q1Rate)+' | 同比: '+U.fD(fc.q1YoY),co:fc.q1Rate>=25?'gn':'rd'},
        {l:'4月力争目标',v:U.fmt(fc.stretch),co:'pu'},{l:'4月确保目标',v:U.fmt(fc.commit),co:'og'},
@@ -563,51 +681,62 @@ const R={
         const c=U.h('div','kc');c.innerHTML='<div class="ki '+k.co+'">'+k.l.slice(0,1)+'</div><div class="kl">'+k.l+'</div><div class="kv" style="font-size:20px">'+k.v+'</div>'+(k.sub?'<div class="ks">'+k.sub+'</div>':'');g5.appendChild(c);});
       el.appendChild(g5);
       if(ch.length>0){
-        const fcRows=ch.map(c=>{const f=MD.aFC(c.rks);return{_k:c.k,_l:c.l,_nl:c.nl,_sk:c.sk,label:c.l,annTgt:f.annTgt,q1Tgt:f.q1Tgt,q1Act:f.q1Act,q1Rate:f.q1Rate,q1YoY:f.q1YoY,nmTgt:f.nmTgt,nmSgn:f.nmSgn,nmPl:f.nmPl,nmTot:f.nmTot,nmRate:f.nmRate,stretch:f.stretch,commit:f.commit};});
+        const fcRows=ch.map(c=>{const f=MD.aFC(c.rks,c.ctryId);return{_k:c.k,_l:c.l,_nl:c.nl,_sk:c.sk,_ctryId:c.ctryId,label:c.l,annTgt:f.annTgt,q1Tgt:f.q1Tgt,q1Act:f.q1Act,q1Rate:f.q1Rate,q1YoY:f.q1YoY,nmTgt:f.nmTgt,nmSgn:f.nmSgn,nmPl:f.nmPl,nmTot:f.nmTot,nmRate:f.nmRate,stretch:f.stretch,commit:f.commit};});
         const fcSm={_s:true,label:'合计',annTgt:fc.annTgt,q1Tgt:fc.q1Tgt,q1Act:fc.q1Act,q1Rate:fc.q1Rate,q1YoY:fc.q1YoY,nmTgt:fc.nmTgt,nmSgn:fc.nmSgn,nmPl:fc.nmPl,nmTot:fc.nmTot,nmRate:fc.nmRate,stretch:fc.stretch,commit:fc.commit};
-        buildT(el,[{key:'label',label:'单位',w:130},{key:'annTgt',label:'年度目标(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'q1Act',label:'Q1完成(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'q1Rate',label:'Q1完成率',w:80,align:'ct',render:v=>U.ltH(v)},{key:'q1YoY',label:'Q1同比',w:75,align:'ct',render:v=>U.fD(v)},{key:'nmTgt',label:'4月目标(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'nmSgn',label:'已签预计(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'nmPl',label:'商机预计(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'nmTot',label:'4月预测(万)',w:90,align:'r',render:v=>U.fN(v)},{key:'nmRate',label:'预计完成率',w:80,align:'ct',render:v=>U.ltH(v)},{key:'stretch',label:'力争(万)',w:80,align:'r',render:v=>U.fN(v)},{key:'commit',label:'确保(万)',w:80,align:'r',render:v=>U.fN(v)}],
-          fcRows.concat([fcSm]),{click:true,onClick(r){const u={};u[r._sk]=r._k;Nav.drill(r._l,r._nl,u);}});
-        /* 预测分解图表 */
+        buildT(el,[{key:'label',label:'单位',w:110},{key:'annTgt',label:'年度目标',w:85,align:'r',render:v=>U.fN(v)},{key:'q1Act',label:'Q1完成',w:80,align:'r',render:v=>U.fN(v)},{key:'q1Rate',label:'Q1率',w:65,align:'ct',render:v=>U.ltH(v)},{key:'q1YoY',label:'同比',w:60,align:'ct',render:v=>U.fD(v)},{key:'nmTgt',label:'4月目标',w:80,align:'r',render:v=>U.fN(v)},{key:'nmSgn',label:'已签预计',w:80,align:'r',render:v=>U.fN(v)},{key:'nmPl',label:'商机预计',w:80,align:'r',render:v=>U.fN(v)},{key:'nmTot',label:'4月预测',w:80,align:'r',render:v=>U.fN(v)},{key:'nmRate',label:'完成率',w:70,align:'ct',render:v=>U.ltH(v)},{key:'stretch',label:'力争',w:65,align:'r',render:v=>U.fN(v)},{key:'commit',label:'确保',w:65,align:'r',render:v=>U.fN(v)}],
+          fcRows.concat([fcSm]),{click:true,onClick(r){const u={};u[r._sk]=r._k;if(r._ctryId)u.ctry=r._ctryId;Nav.drill(r._l,r._nl,u);}});
         const cwFC=U.h('div','cr');
-        const bFC1=U.h('div','cb');bFC1.innerHTML='<div class="ct2">4月预测分解：已签合同 vs 跟进商机 vs 目标</div>';const cdFC1=U.h('div','cc');cdFC1.id='c-fc';bFC1.appendChild(cdFC1);cwFC.appendChild(bFC1);
-        const bFC2=U.h('div','cb');bFC2.innerHTML='<div class="ct2">各单位一季度完成率</div>';const cdFC2=U.h('div','cc');cdFC2.id='c-q1r';bFC2.appendChild(cdFC2);cwFC.appendChild(bFC2);
+        const bFC1=U.h('div','cb');bFC1.innerHTML='<div class="ct2">4月预测分解</div>';const cdFC1=U.h('div','cc');cdFC1.id='c-fc';bFC1.appendChild(cdFC1);cwFC.appendChild(bFC1);
+        const bFC2=U.h('div','cb');bFC2.innerHTML='<div class="ct2">各单位Q1完成率</div>';const cdFC2=U.h('div','cc');cdFC2.id='c-q1r';bFC2.appendChild(cdFC2);cwFC.appendChild(bFC2);
         el.appendChild(cwFC);
         setTimeout(()=>{
           CF.mk(U.el('c-fc'),()=>CF.fcBar(fcRows.map(r=>r.label),fcRows.map(r=>r.nmSgn),fcRows.map(r=>r.nmPl),fcRows.map(r=>r.nmTgt)));
-          const q1o=CF.base();Object.assign(q1o,{xAxis:{type:'category',data:fcRows.map(r=>r.label),axisLine:{lineStyle:{color:'#e8ecf0'}},axisLabel:{rotate:fcRows.length>5?20:0}},yAxis:{type:'value',name:'完成率%',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}},axisLabel:{formatter:'{value}%'}},series:[{name:'Q1完成率',type:'bar',data:fcRows.map(r=>+r.q1Rate.toFixed(1)),itemStyle:{color:function(p){return p.value>=25?'#52c41a':p.value>=20?'#faad14':'#ff4d4f'},borderRadius:[3,3,0,0]},barMaxWidth:35,label:{show:true,position:'top',formatter:'{c}%',fontSize:11}},{name:'25%基准',type:'line',data:fcRows.map(()=>25),lineStyle:{color:'#ff4d4f',width:2,type:'dashed'},symbol:'none'}]});
+          const q1o=CF.base();Object.assign(q1o,{xAxis:{type:'category',data:fcRows.map(r=>r.label),axisLine:{lineStyle:{color:'#e8ecf0'}},axisLabel:{rotate:fcRows.length>5?20:0}},yAxis:{type:'value',name:'%',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}},axisLabel:{formatter:'{value}%'}},series:[{name:'Q1完成率',type:'bar',data:fcRows.map(r=>+r.q1Rate.toFixed(1)),itemStyle:{color:function(p){return p.value>=25?'#52c41a':p.value>=20?'#faad14':'#ff4d4f'},borderRadius:[3,3,0,0]},barMaxWidth:35,label:{show:true,position:'top',formatter:'{c}%',fontSize:11}},{name:'25%基准',type:'line',data:fcRows.map(()=>25),lineStyle:{color:'#ff4d4f',width:2,type:'dashed'},symbol:'none'}]});
           CF.mk(U.el('c-q1r'),q1o);
         },100);
       }
     }
 
-    /* ====== 六、人效分析(国际专属) ====== */
+    /* ====== 六、人效分析(增强:费用拆分+建议费用率+排名颜色) ====== */
     if(intl){
       el.appendChild(U.h('div','st','六、人效分析'));
-      const seData=MD.aSE(ks);
+      const seData=MD.aSE(ks,cf);
       if(seData.length>0){
-        buildT(el,[{key:'rank',label:'排名',w:50,align:'ct'},{key:'name',label:'销售经理',w:120},{key:'rg',label:'区域',w:80},{key:'yr',label:'司龄(年)',w:65,align:'ct'},{key:'annTgt',label:'年度目标(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'ytd',label:'累计完成(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'rate',label:'累计达成率',w:85,align:'ct',render:v=>U.ltH(v)},{key:'pipeline90d',label:'90天商机(万)',w:95,align:'r',render:v=>U.fN(v)},{key:'se',label:'销售费用(元)',w:95,align:'r',render:v=>U.fN(v)},{key:'seR',label:'费用率',w:70,align:'ct',render:(v)=>U.fP(v)},{key:'eval',label:'评价',w:80,align:'ct',render:v=>U.evTag(v)}],seData);
+        buildT(el,[
+          {key:'rank',label:'排名',w:45,align:'ct',render:(v,r)=>'<span style="color:'+U.rankColor(r.rate)+'">'+v+'</span>'},
+          {key:'name',label:'销售经理',w:110},{key:'rg',label:'区域',w:70},{key:'yr',label:'司龄',w:45,align:'ct'},
+          {key:'annTgt',label:'年度目标',w:80,align:'r',render:v=>U.fN(v)},
+          {key:'ytd',label:'累计完成',w:80,align:'r',render:v=>U.fN(v)},
+          {key:'rate',label:'累计达成率',w:85,align:'ct',render:(v,r)=>U.rankLtH(v,r.warn3)},
+          {key:'pipeline90d',label:'90天商机',w:80,align:'r',render:v=>U.fN(v)},
+          {key:'mktFee',label:'市场推广费',w:78,align:'r',render:v=>U.fN(v)},
+          {key:'trvFee',label:'差旅费',w:70,align:'r',render:v=>U.fN(v)},
+          {key:'entFee',label:'招待费',w:65,align:'r',render:v=>U.fN(v)},
+          {key:'seR',label:'费用率',w:60,align:'ct',render:v=>U.fP(v)},
+          {key:'sugR',label:'建议费用率',w:75,align:'ct',render:v=>U.fP(v)},
+          {key:'eval',label:'费用评价',w:80,align:'ct',render:(v,r)=>U.feeEval(r.seR,r.sugR)}
+        ],seData);
       }
-      /* 人效图表 */
       const cwSE=U.h('div','cr');
       const bSE1=U.h('div','cb');bSE1.innerHTML='<div class="ct2">销售经理达成率排名</div>';const cdSE1=U.h('div','cc');cdSE1.id='c-se-rank';cdSE1.style.height=Math.max(310,seData.length*28)+'px';bSE1.appendChild(cdSE1);cwSE.appendChild(bSE1);
       const bSE2=U.h('div','cb');bSE2.innerHTML='<div class="ct2">费用率 vs 达成率散点</div>';const cdSE2=U.h('div','cc');cdSE2.id='c-se-scatter';bSE2.appendChild(cdSE2);cwSE.appendChild(bSE2);
       el.appendChild(cwSE);
       setTimeout(()=>{
         const top20=seData.slice(0,20).reverse();
-        const ro=CF.base();Object.assign(ro,{grid:{top:20,right:80,bottom:20,left:120,containLabel:false},xAxis:{type:'value',name:'达成率%',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}}},yAxis:{type:'category',data:top20.map(d=>d.name),axisLine:{lineStyle:{color:'#e8ecf0'}}},series:[{type:'bar',data:top20.map(d=>+d.rate.toFixed(1)),itemStyle:{color:function(p){return p.value>=25?'#52c41a':p.value>=20?'#faad14':'#ff4d4f'},borderRadius:[0,3,3,0]},barMaxWidth:18,label:{show:true,position:'right',formatter:'{c}%',fontSize:11}}]});
+        const ro=CF.base();Object.assign(ro,{grid:{top:20,right:80,bottom:20,left:120,containLabel:false},xAxis:{type:'value',name:'达成率%',axisLine:{show:false},splitLine:{lineStyle:{color:'#f0f0f0'}}},yAxis:{type:'category',data:top20.map(d=>d.name),axisLine:{lineStyle:{color:'#e8ecf0'}}},series:[{type:'bar',data:top20.map(d=>({value:+d.rate.toFixed(1),itemStyle:{color:d.rate>=80?'#52c41a':d.rate>=50?'#fa8c16':'#ff4d4f'}})),barMaxWidth:18,label:{show:true,position:'right',formatter:function(p){return p.value.toFixed(1)+'%'+(top20[p.dataIndex].warn3?' !!!':'')},fontSize:11}}]});
         CF.mk(U.el('c-se-rank'),ro);
-        const so=CF.base();Object.assign(so,{xAxis:{type:'value',name:'达成率%',axisLine:{lineStyle:{color:'#e8ecf0'}},splitLine:{lineStyle:{color:'#f0f0f0'}}},yAxis:{type:'value',name:'费用率%',axisLine:{lineStyle:{color:'#e8ecf0'}},splitLine:{lineStyle:{color:'#f0f0f0'}}},series:[{type:'scatter',data:seData.map(d=>[+d.rate.toFixed(1),+d.seR.toFixed(1),d.name]),symbolSize:12,itemStyle:{color:'#1677ff',opacity:.7},label:{show:seData.length<=15,formatter:function(p){return p.data[2]},position:'right',fontSize:10,color:'#6b7280'}}],tooltip:{trigger:'item',formatter:function(p){return p.data[2]+'<br/>达成率: '+p.data[0]+'%<br/>费用率: '+p.data[1]+'%'}}});
+        const so=CF.base();Object.assign(so,{xAxis:{type:'value',name:'达成率%',axisLine:{lineStyle:{color:'#e8ecf0'}},splitLine:{lineStyle:{color:'#f0f0f0'}}},yAxis:{type:'value',name:'费用率%',axisLine:{lineStyle:{color:'#e8ecf0'}},splitLine:{lineStyle:{color:'#f0f0f0'}}},series:[{type:'scatter',data:seData.map(d=>[+d.rate.toFixed(1),+d.seR.toFixed(1),d.name,d.sugR]),symbolSize:12,itemStyle:{color:function(p){return p.data[1]>p.data[3]?'#ff4d4f':'#1677ff'},opacity:.7},label:{show:seData.length<=15,formatter:function(p){return p.data[2]},position:'right',fontSize:10,color:'#6b7280'}}],tooltip:{trigger:'item',formatter:function(p){return p.data[2]+'<br/>达成率: '+p.data[0]+'%<br/>费用率: '+p.data[1]+'%<br/>建议: '+p.data[3]+'%'+(p.data[1]>p.data[3]?'<br/><b style="color:#ff4d4f">费用超标</b>':'')}}});
         CF.mk(U.el('c-se-scatter'),so);
       },100);
     }
 
     /* ====== 预警 ====== */
     if(S.dl<=1){
-      el.appendChild(U.h('div','st','预警：商机缺口清单（50%覆盖率不足100%）'));
+      el.appendChild(U.h('div','st','预警：商机缺口清单'));
       const al=[];ks.forEach(rk=>{const s=MD.aS([rk]),o=MD.aO([rk]),rm=s.rev.ann-s.rev.ytd,gp=rm-o.oh-o.hp,cv=rm>0?(o.oh+o.hp)/rm*100:999;if(cv<100)al.push({_a:true,label:MD.RL[rk],rem:rm,hp2:o.oh+o.hp,gap:gp,c50:cv});});
       al.sort((a,b)=>b.gap-a.gap);
       if(!al.length)el.appendChild(U.h('div','','<div style="color:var(--grn);padding:14px;background:var(--card);border-radius:var(--r);border:1px solid var(--bdr)">所有区域商机储备充足，无预警项。</div>'));
-      else buildT(el,[{key:'label',label:'区域',w:140},{key:'rem',label:'剩余目标(万)',w:100,align:'r',render:v=>U.fN(v)},{key:'hp2',label:'在手+高概率(万)',w:110,align:'r',render:v=>U.fN(v)},{key:'gap',label:'缺口(万)',w:90,align:'r',render:v=>'<span class="dn">'+U.fN(v)+'</span>'},{key:'c50',label:'50%覆盖率',w:90,align:'ct',render:v=>U.ltH(v)}],al);
+      else buildT(el,[{key:'label',label:'区域',w:140},{key:'rem',label:'剩余目标(万)',w:100,align:'r',render:v=>U.fN(v)},{key:'hp2',label:'在手+高概率',w:100,align:'r',render:v=>U.fN(v)},{key:'gap',label:'缺口(万)',w:90,align:'r',render:v=>'<span class="dn">'+U.fN(v)+'</span>'},{key:'c50',label:'50%覆盖率',w:90,align:'ct',render:v=>U.ltH(v)}],al);
     }
   }
 };
